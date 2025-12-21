@@ -2,7 +2,7 @@
 Shared test fixtures for pytest.
 
 This file contains reusable test fixtures that mock external dependencies
-(OpenAI, Anthropic APIs) and provide test clients for the FastAPI app.
+(OpenAI API) and provide test clients for the FastAPI app.
 """
 
 from unittest.mock import AsyncMock, Mock, patch
@@ -27,14 +27,22 @@ MOCK_OPENAI_RESPONSE = {
     "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
 }
 
-MOCK_ANTHROPIC_RESPONSE = {
-    "id": "msg_123",
-    "type": "message",
-    "role": "assistant",
-    "content": [{"type": "text", "text": "This is a mock response from Anthropic."}],
-    "model": "claude-3-opus-20240229",
-    "stop_reason": "end_turn",
-    "usage": {"input_tokens": 10, "output_tokens": 20},
+MOCK_OPENAI_GPT35_RESPONSE = {
+    "id": "chatcmpl-456",
+    "object": "chat.completion",
+    "created": 1677652289,
+    "model": "gpt-3.5-turbo",
+    "choices": [
+        {
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "This is a mock response from gpt-3.5-turbo.",
+            },
+            "finish_reason": "stop",
+        }
+    ],
+    "usage": {"prompt_tokens": 8, "completion_tokens": 15, "total_tokens": 23},
 }
 
 
@@ -159,82 +167,6 @@ def mock_openai_stream():
 
 
 # ============================================================================
-# Anthropic Mocks
-# ============================================================================
-
-
-@pytest.fixture
-def mock_anthropic_client():
-    """
-    Mock Anthropic client with successful responses.
-
-    Usage:
-        def test_anthropic_call(mock_anthropic_client):
-            response = await mock_anthropic_client.messages.create(...)
-            assert response.content[0].text == "..."
-    """
-    client = AsyncMock()
-
-    # Mock the messages.create method
-    mock_response = Mock()
-    mock_response.content = [Mock()]
-    mock_response.content[0].text = MOCK_ANTHROPIC_RESPONSE["content"][0]["text"]
-    mock_response.usage = Mock()
-    mock_response.usage.input_tokens = 10
-    mock_response.usage.output_tokens = 20
-    mock_response.model = "claude-3-opus-20240229"
-
-    client.messages.create = AsyncMock(return_value=mock_response)
-
-    return client
-
-
-@pytest.fixture
-def mock_anthropic_client_error():
-    """
-    Mock Anthropic client that raises errors.
-    """
-    client = AsyncMock()
-    client.messages.create = AsyncMock(side_effect=Exception("Anthropic API error"))
-    return client
-
-
-@pytest.fixture
-def mock_anthropic_stream():
-    """
-    Mock Anthropic streaming response.
-    """
-
-    async def mock_stream():
-        tokens = ["Hello", " ", "from", " ", "Claude", "!"]
-        for token in tokens:
-            chunk = Mock()
-            chunk.content = [Mock()]
-            chunk.content[0].text = token
-            yield chunk
-
-    return mock_stream()
-
-
-# ============================================================================
-# Combined Mocks (Both Providers)
-# ============================================================================
-
-
-@pytest.fixture
-def mock_all_llm_clients(mock_openai_client, mock_anthropic_client):
-    """
-    Mock both OpenAI and Anthropic clients.
-
-    Usage:
-        def test_parallel_calls(mock_all_llm_clients):
-            openai_client, anthropic_client = mock_all_llm_clients
-            # Test parallel orchestration
-    """
-    return mock_openai_client, mock_anthropic_client
-
-
-# ============================================================================
 # Test Data
 # ============================================================================
 
@@ -296,7 +228,6 @@ def mock_env_vars(monkeypatch):
             assert settings.openai_api_key == "test-key"
     """
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
     monkeypatch.setenv("ENVIRONMENT", "testing")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
 
@@ -310,7 +241,6 @@ def mock_settings():
 
     return Settings(
         openai_api_key="test-openai-key",
-        anthropic_api_key="test-anthropic-key",
         environment="testing",
         default_model="gpt-4-turbo",
         default_temperature=0.7,

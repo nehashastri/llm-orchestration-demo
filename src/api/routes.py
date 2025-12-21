@@ -18,6 +18,7 @@ from src.api.models import (
     HealthResponse,
     Metadata,
     Metrics,
+    ModelInfo,
     ModelsResponse,
     ParallelRequest,
     ParallelResponse,
@@ -28,7 +29,6 @@ from src.api.models import (
 from src.llm.clients import get_client
 from src.llm.orchestrator import (
     fallback_orchestration,
-    parallel_orchestration,
     streaming_orchestration,
 )
 from src.utils.config import get_provider_for_model, list_models, settings
@@ -60,19 +60,11 @@ async def health_check():
 
     # Check OpenAI
     try:
-        openai_client = get_client("openai")
+        _openai_client = get_client("openai")  # type: ignore
         # Could add actual API ping here
         providers["openai"] = {"status": "connected"}
     except Exception as e:
         providers["openai"] = {"status": "error", "error": str(e)}
-        overall_healthy = False
-
-    # Check Anthropic
-    try:
-        anthropic_client = get_client("anthropic")
-        providers["anthropic"] = {"status": "connected"}
-    except Exception as e:
-        providers["anthropic"] = {"status": "error", "error": str(e)}
         overall_healthy = False
 
     return HealthResponse(
@@ -143,60 +135,30 @@ async def chat_completion(request_body: ChatRequest, request: Request):
 
 
 # ============================================================================
-# Parallel Orchestration
+# Parallel Orchestration - DISABLED (OpenAI-only mode)
 # ============================================================================
 
 
 @app.post(
     "/chat/parallel",
     response_model=ParallelResponse,
-    status_code=status.HTTP_200_OK,
+    status_code=status.HTTP_501_NOT_IMPLEMENTED,
     tags=["Chat"],
-    summary="Parallel orchestration",
-    description="Call multiple LLM providers in parallel and return fastest response",
+    summary="Parallel orchestration (disabled)",
+    description="Not available in OpenAI-only mode",
 )
 async def parallel_chat(request_body: ParallelRequest, request: Request):
     """
-    Execute parallel orchestration across multiple providers.
+    Parallel orchestration is disabled in OpenAI-only mode.
 
-    Calls all specified providers simultaneously and returns
-    the fastest response along with all responses for comparison.
+    Use /chat/fallback endpoint for reliability instead.
     """
-    logger.info(
-        "parallel_request", providers=request_body.providers, request_id=request.state.request_id
+    from fastapi import HTTPException
+
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Parallel orchestration is not available in OpenAI-only mode. Use /chat/fallback instead.",
     )
-
-    # Execute parallel orchestration
-    result = await parallel_orchestration(
-        prompt=request_body.prompt,
-        providers=request_body.providers,
-        temperature=request_body.temperature,
-        max_tokens=request_body.max_tokens,
-        system_prompt=request_body.system_prompt,
-    )
-
-    # Update stats
-    update_provider_stats(result["winner"]["provider"], result["metrics"]["total_cost_usd"])
-
-    # Build response with all individual responses
-    all_responses = [
-        ChatResponse(
-            content=r["content"],
-            model=r["model"],
-            provider=r["provider"],
-            usage=TokenUsage(**r["usage"]),
-            metrics=Metrics(**r["metrics"]),
-            metadata=Metadata(
-                request_id=request.state.request_id,
-                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            ),
-        )
-        for r in result["all_responses"]
-    ]
-
-    return ParallelResponse(
-        content=result["content"],
-        winner=result["winner"],
         all_responses=all_responses,
         errors=result.get("errors"),
         metrics=result["metrics"],
@@ -345,7 +307,8 @@ async def get_models():
     Returns model metadata including pricing, capabilities,
     and provider information.
     """
-    models = list_models()
+    models_data = list_models()
+    models = [ModelInfo(**model) for model in models_data]
     return ModelsResponse(models=models)
 
 

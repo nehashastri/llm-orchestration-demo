@@ -1,16 +1,17 @@
 """
-LLM client implementations for OpenAI and Anthropic.
+"""LLM client implementations for OpenAI.
 
-Provides a unified interface for interacting with different LLM providers,
+Provides a unified interface for interacting with OpenAI models,
 handling response normalization, error handling, and streaming.
 """
 
-from abc import ABC, abstractmethod
-from typing import AsyncIterator
 import time
+from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
+
 from openai import AsyncOpenAI
-from anthropic import AsyncAnthropic
-from src.utils.config import settings, get_model_config
+
+from src.utils.config import get_model_config, settings
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -27,7 +28,7 @@ class BaseLLMClient(ABC):
     @property
     @abstractmethod
     def provider(self) -> str:
-        """Return the provider name (e.g., 'openai', 'anthropic')."""
+        """Return the provider name (e.g., 'openai')."""
         pass
 
     @abstractmethod
@@ -38,7 +39,7 @@ class BaseLLMClient(ABC):
         temperature: float | None = None,
         max_tokens: int | None = None,
         system_prompt: str | None = None,
-        timeout: int | None = None
+        timeout: int | None = None,
     ) -> dict:
         """
         Generate a completion from the LLM.
@@ -63,14 +64,14 @@ class BaseLLMClient(ABC):
         pass
 
     @abstractmethod
-    async def generate_stream(
+    def generate_stream(
         self,
         prompt: str,
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        system_prompt: str | None = None
-    ) -> AsyncIterator[str]:
+        system_prompt: str | None = None,
+    ) -> AsyncGenerator[str, None]:
         """
         Generate a streaming completion from the LLM.
 
@@ -82,12 +83,7 @@ class BaseLLMClient(ABC):
         """
         pass
 
-    def _calculate_cost(
-        self,
-        model: str,
-        prompt_tokens: int,
-        completion_tokens: int
-    ) -> float:
+    def _calculate_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float:
         """
         Calculate cost for an LLM call.
 
@@ -119,9 +115,7 @@ class OpenAIClient(BaseLLMClient):
         Args:
             api_key: OpenAI API key (uses settings.openai_api_key if None)
         """
-        self._client = AsyncOpenAI(
-            api_key=api_key or settings.openai_api_key
-        )
+        self._client = AsyncOpenAI(api_key=api_key or settings.openai_api_key)
 
     @property
     def provider(self) -> str:
@@ -134,7 +128,7 @@ class OpenAIClient(BaseLLMClient):
         temperature: float | None = None,
         max_tokens: int | None = None,
         system_prompt: str | None = None,
-        timeout: int | None = None
+        timeout: int | None = None,
     ) -> dict:
         """Generate completion using OpenAI."""
         model = model or settings.default_model
@@ -157,21 +151,22 @@ class OpenAIClient(BaseLLMClient):
                 messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
-                timeout=timeout
+                timeout=timeout,
             )
 
             latency_ms = (time.time() - start_time) * 1000
 
             # Extract data
             content = response.choices[0].message.content
-            prompt_tokens = response.usage.prompt_tokens
-            completion_tokens = response.usage.completion_tokens
+            prompt_tokens = response.usage.prompt_tokens if response.usage else 0
+            completion_tokens = response.usage.completion_tokens if response.usage else 0
 
             # Calculate cost
             cost_usd = self._calculate_cost(model, prompt_tokens, completion_tokens)
 
             # Log the call
             from src.utils.logger import log_llm_call
+
             log_llm_call(
                 model=model,
                 provider=self.provider,
@@ -179,7 +174,7 @@ class OpenAIClient(BaseLLMClient):
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
                 cost_usd=cost_usd,
-                success=True
+                success=True,
             )
 
             return {
@@ -189,18 +184,16 @@ class OpenAIClient(BaseLLMClient):
                 "usage": {
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
-                    "total_tokens": prompt_tokens + completion_tokens
+                    "total_tokens": prompt_tokens + completion_tokens,
                 },
-                "metrics": {
-                    "latency_ms": round(latency_ms, 2),
-                    "cost_usd": round(cost_usd, 6)
-                }
+                "metrics": {"latency_ms": round(latency_ms, 2), "cost_usd": round(cost_usd, 6)},
             }
 
         except Exception as e:
             latency_ms = (time.time() - start_time) * 1000
 
             from src.utils.logger import log_llm_call
+
             log_llm_call(
                 model=model,
                 provider=self.provider,
@@ -209,189 +202,50 @@ class OpenAIClient(BaseLLMClient):
                 completion_tokens=0,
                 cost_usd=0.0,
                 success=False,
-                error=str(e)
+                error=str(e),
             )
 
             raise
 
-    async def generate_stream(
-        self,
-        prompt: str,
-        model: str | None = None,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        system_prompt: str | None = None
-    ) -> AsyncIterator[str]:
-        """Generate streaming completion using OpenAI."""
-        model = model or settings.default_model
-        temperature = temperature if temperature is not None else settings.default_temperature
-        max_tokens = max_tokens or settings.default_max_tokens
-
-        # Build messages
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
-
-        try:
-            stream = await self._client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True
-            )
-
-            async for chunk in stream:
-                if chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
-
-        except Exception as e:
-            logger.error("openai_stream_error", error=str(e))
-            raise
-
-
-class AnthropicClient(BaseLLMClient):
-    """
-    Anthropic API client for Claude models.
-
-    Normalizes responses to match OpenAI format for consistency.
-    """
-
-    def __init__(self, api_key: str | None = None):
-        """
-        Initialize Anthropic client.
-
-        Args:
-            api_key: Anthropic API key (uses settings.anthropic_api_key if None)
-        """
-        self._client = AsyncAnthropic(
-            api_key=api_key or settings.anthropic_api_key
-        )
-
-    @property
-    def provider(self) -> str:
-        return "anthropic"
-
-    async def generate(
+    def generate_stream(
         self,
         prompt: str,
         model: str | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
         system_prompt: str | None = None,
-        timeout: int | None = None
-    ) -> dict:
-        """Generate completion using Anthropic."""
-        model = model or "claude-3-sonnet"
-        temperature = temperature if temperature is not None else settings.default_temperature
-        max_tokens = max_tokens or settings.default_max_tokens
-        timeout = timeout or settings.default_timeout
+    ) -> AsyncGenerator[str, None]:
+        """Generate streaming completion using OpenAI."""
 
-        # Track timing
-        start_time = time.time()
+        async def _gen() -> AsyncGenerator[str, None]:
+            mdl = model or settings.default_model
+            temp = temperature if temperature is not None else settings.default_temperature
+            max_toks = max_tokens or settings.default_max_tokens
 
-        try:
-            # Anthropic API uses different parameter names
-            kwargs = {
-                "model": model,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": temperature,
-                "max_tokens": max_tokens,
-                "timeout": timeout
-            }
-
+            # Build messages
+            messages = []
             if system_prompt:
-                kwargs["system"] = system_prompt
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
 
-            response = await self._client.messages.create(**kwargs)
+            try:
+                stream = await self._client.chat.completions.create(
+                    model=mdl,
+                    messages=messages,
+                    temperature=temp,
+                    max_tokens=max_toks,
+                    stream=True,
+                )
 
-            latency_ms = (time.time() - start_time) * 1000
+                async for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
 
-            # Extract data (normalize to OpenAI format)
-            content = response.content[0].text
-            input_tokens = response.usage.input_tokens
-            output_tokens = response.usage.output_tokens
+            except Exception as e:
+                logger.error("openai_stream_error", error=str(e))
+                raise
 
-            # Calculate cost
-            cost_usd = self._calculate_cost(model, input_tokens, output_tokens)
-
-            # Log the call
-            from src.utils.logger import log_llm_call
-            log_llm_call(
-                model=model,
-                provider=self.provider,
-                latency_ms=latency_ms,
-                prompt_tokens=input_tokens,
-                completion_tokens=output_tokens,
-                cost_usd=cost_usd,
-                success=True
-            )
-
-            return {
-                "content": content,
-                "model": model,
-                "provider": self.provider,
-                "usage": {
-                    "prompt_tokens": input_tokens,
-                    "completion_tokens": output_tokens,
-                    "total_tokens": input_tokens + output_tokens
-                },
-                "metrics": {
-                    "latency_ms": round(latency_ms, 2),
-                    "cost_usd": round(cost_usd, 6)
-                }
-            }
-
-        except Exception as e:
-            latency_ms = (time.time() - start_time) * 1000
-
-            from src.utils.logger import log_llm_call
-            log_llm_call(
-                model=model,
-                provider=self.provider,
-                latency_ms=latency_ms,
-                prompt_tokens=0,
-                completion_tokens=0,
-                cost_usd=0.0,
-                success=False,
-                error=str(e)
-            )
-
-            raise
-
-    async def generate_stream(
-        self,
-        prompt: str,
-        model: str | None = None,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        system_prompt: str | None = None
-    ) -> AsyncIterator[str]:
-        """Generate streaming completion using Anthropic."""
-        model = model or "claude-3-sonnet"
-        temperature = temperature if temperature is not None else settings.default_temperature
-        max_tokens = max_tokens or settings.default_max_tokens
-
-        kwargs = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": True
-        }
-
-        if system_prompt:
-            kwargs["system"] = system_prompt
-
-        try:
-            async with self._client.messages.stream(**kwargs) as stream:
-                async for text in stream.text_stream:
-                    yield text
-
-        except Exception as e:
-            logger.error("anthropic_stream_error", error=str(e))
-            raise
+        return _gen()
 
 
 # Factory function to get the appropriate client
@@ -400,7 +254,7 @@ def get_client(provider: str) -> BaseLLMClient:
     Get an LLM client for the specified provider.
 
     Args:
-        provider: Provider name ("openai" or "anthropic")
+        provider: Provider name ("openai")
 
     Returns:
         Initialized LLM client
@@ -410,7 +264,5 @@ def get_client(provider: str) -> BaseLLMClient:
     """
     if provider == "openai":
         return OpenAIClient()
-    elif provider == "anthropic":
-        return AnthropicClient()
     else:
-        raise ValueError(f"Unknown provider: {provider}")
+        raise ValueError(f"Unknown provider: {provider}. Only 'openai' is supported.")

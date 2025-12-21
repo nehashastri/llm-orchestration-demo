@@ -119,7 +119,7 @@ def log_llm_call(
 
     Args:
         model: Model identifier
-        provider: Provider name (openai, anthropic)
+        provider: Provider name (openai)
         latency_ms: Request latency in milliseconds
         prompt_tokens: Input tokens used
         completion_tokens: Output tokens generated

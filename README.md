@@ -2,9 +2,9 @@ Production-ready FastAPI service for orchestrating multiple LLM providers with i
 
 ✨ Features
 
-🔄 Multi-Provider Support: OpenAI (GPT-4) and Anthropic (Claude 3)
+🔄 OpenAI Integration: GPT-4 and GPT-3.5 Turbo models
 ⚡ Async-First Architecture: Non-blocking I/O for maximum throughput
-🎯 Intelligent Orchestration: Parallel calls, fallback strategies, streaming
+🎯 Intelligent Fallback: Automatic fallback to cheaper models with default message safety net
 📊 Built-in Observability: Structured logging, cost tracking, latency monitoring
 🛡️ Production-Ready: Error handling, rate limiting, request validation
 📚 Auto-Generated Docs: Interactive Swagger UI at /docs
@@ -16,7 +16,6 @@ Prerequisites
 Python 3.11+
 Pixi (recommended) or pip
 OpenAI API key
-Anthropic API key
 
 1. Clone the Repository
 bashgit clone https://github.com/yourusername/llm-orchestration-demo.git
@@ -25,9 +24,8 @@ cd llm-orchestration-demo
 bash# Copy example env file
 cp .env.example .env
 
-# Edit .env and add your API keys
+# Edit .env and add your API key
 OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
 3. Install Dependencies
 Option A: Using Pixi (Recommended)
 bashpixi install
@@ -105,28 +103,17 @@ response = requests.post(
 )
 
 print(response.json()["content"])
-Parallel Orchestration
-python# Call multiple providers simultaneously
-response = requests.post(
-    "http://localhost:8000/chat/parallel",
-    json={
-        "prompt": "Write a haiku about coding",
-        "providers": ["openai", "anthropic"]
-    }
-)
-
-# Returns the fastest response
-result = response.json()
-print(f"Winner: {result['winner']['provider']}")
-print(f"Content: {result['content']}")
+## Parallel Testing (Disabled)
+**Note**: Parallel orchestration endpoint has been disabled in OpenAI-only mode.
+Use fallback orchestration for reliability instead.
 Fallback Strategy
-python# Try OpenAI first, fallback to Anthropic on failure
+python# Automatic fallback: gpt-4-turbo → gpt-3.5-turbo → default message
 response = requests.post(
     "http://localhost:8000/chat/fallback",
     json={
         "prompt": "What is quantum computing?",
         "primary_provider": "openai",
-        "fallback_providers": ["anthropic"],
+        "primary_model": "gpt-4-turbo",
         "timeout": 10
     }
 )
@@ -134,6 +121,7 @@ response = requests.post(
 result = response.json()
 print(f"Provider used: {result['provider_used']}")
 print(f"Fallback triggered: {result['fallback_triggered']}")
+print(f"Is default message: {result['is_default_message']}")
 Streaming Response
 pythonimport sseclient
 import requests
@@ -229,7 +217,6 @@ ENABLE_CACHING=true
 CACHE_TTL_SECONDS=3600
 Docker (Coming Soon)
 bashdocker build -t llm-orchestration .
-docker run -p 8000:8000 --env-file .env llm-orchestration
 Production Checklist
 
  Set ENVIRONMENT=production in .env
@@ -276,4 +263,3 @@ This project is licensed under the MIT License - see LICENSE file for details.
 FastAPI - Modern web framework
 OpenAI - GPT models
 Anthropic - Claude models
-Pixi - Package management

@@ -8,10 +8,12 @@ exception handlers, and startup/shutdown events.
 import time
 import uuid
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
 from src.utils.config import settings
 from src.utils.logger import get_logger, log_api_request
 
@@ -26,7 +28,7 @@ stats = {
     "requests_by_provider": {},
     "total_cost_usd": 0.0,
     "total_latency_ms": 0.0,
-    "errors": 0
+    "errors": 0,
 }
 
 
@@ -40,16 +42,12 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info(
-        "application_starting",
-        environment=settings.environment,
-        version=settings.api_version
+        "application_starting", environment=settings.environment, version=settings.api_version
     )
 
     # Validate API keys are set
     if not settings.openai_api_key:
         logger.warning("openai_api_key_not_set")
-    if not settings.anthropic_api_key:
-        logger.warning("anthropic_api_key_not_set")
 
     logger.info("application_ready")
 
@@ -66,13 +64,14 @@ app = FastAPI(
     description=settings.api_description,
     lifespan=lifespan,
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 
 # ============================================================================
 # Middleware
 # ============================================================================
+
 
 @app.middleware("http")
 async def add_request_id_middleware(request: Request, call_next):
@@ -99,7 +98,7 @@ async def add_request_id_middleware(request: Request, call_next):
         status_code=response.status_code,
         latency_ms=latency_ms,
         request_id=request_id,
-        client_ip=request.client.host if request.client else None
+        client_ip=request.client.host if request.client else None,
     )
 
     # Update stats
@@ -140,6 +139,7 @@ app.add_middleware(
 # Exception Handlers
 # ============================================================================
 
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """
@@ -157,7 +157,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         request_id=request_id,
         field=field,
         message=message,
-        path=request.url.path
+        path=request.url.path,
     )
 
     stats["errors"] += 1
@@ -169,8 +169,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "message": message,
             "field": field,
             "request_id": request_id,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        }
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
     )
 
 
@@ -179,12 +179,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     """Handle ValueError exceptions (e.g., invalid model)."""
     request_id = getattr(request.state, "request_id", "unknown")
 
-    logger.warning(
-        "value_error",
-        request_id=request_id,
-        error=str(exc),
-        path=request.url.path
-    )
+    logger.warning("value_error", request_id=request_id, error=str(exc), path=request.url.path)
 
     stats["errors"] += 1
 
@@ -194,8 +189,8 @@ async def value_error_handler(request: Request, exc: ValueError):
             "error": "invalid_input",
             "message": str(exc),
             "request_id": request_id,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        }
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
     )
 
 
@@ -204,12 +199,7 @@ async def timeout_error_handler(request: Request, exc: TimeoutError):
     """Handle timeout errors."""
     request_id = getattr(request.state, "request_id", "unknown")
 
-    logger.error(
-        "timeout_error",
-        request_id=request_id,
-        error=str(exc),
-        path=request.url.path
-    )
+    logger.error("timeout_error", request_id=request_id, error=str(exc), path=request.url.path)
 
     stats["errors"] += 1
 
@@ -219,8 +209,8 @@ async def timeout_error_handler(request: Request, exc: TimeoutError):
             "error": "timeout_error",
             "message": "Request timed out",
             "request_id": request_id,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        }
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
     )
 
 
@@ -231,7 +221,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
     # Check if it's a provider error
     error_str = str(exc).lower()
-    if any(keyword in error_str for keyword in ["api", "provider", "openai", "anthropic"]):
+    if any(keyword in error_str for keyword in ["api", "provider", "openai"]):
         status_code = status.HTTP_502_BAD_GATEWAY
         error_type = "provider_error"
         message = "Upstream provider error"
@@ -245,7 +235,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         request_id=request_id,
         error_type=error_type,
         error=str(exc),
-        path=request.url.path
+        path=request.url.path,
     )
 
     stats["errors"] += 1
@@ -256,14 +246,15 @@ async def general_exception_handler(request: Request, exc: Exception):
             "error": error_type,
             "message": message,
             "request_id": request_id,
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-        }
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        },
     )
 
 
 # ============================================================================
 # Utility Functions
 # ============================================================================
+
 
 def get_uptime_seconds() -> int:
     """Get application uptime in seconds."""
@@ -280,4 +271,3 @@ def update_provider_stats(provider: str, cost: float):
 
 
 # Import routes (must be after app creation)
-from src.api import routes  # noqa: E402

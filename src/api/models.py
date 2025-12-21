@@ -45,16 +45,16 @@ class ParallelRequest(BaseModel):
     Example:
         {
             "prompt": "Write a haiku",
-            "providers": ["openai", "anthropic"],
+            "providers": ["openai"],
             "temperature": 0.8
         }
     """
 
     prompt: str = Field(..., min_length=1, max_length=10000, description="User prompt")
     providers: list[str] = Field(
-        default=["openai", "anthropic"],
+        default=["openai"],
         min_length=1,
-        description="List of providers to query in parallel",
+        description="List of providers to query in parallel (only openai supported)",
     )
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: int = Field(default=500, ge=1, le=4000, description="Maximum tokens")
@@ -67,7 +67,7 @@ class ParallelRequest(BaseModel):
         if not v:
             raise ValueError("providers list cannot be empty")
 
-        valid_providers = {"openai", "anthropic"}
+        valid_providers = {"openai"}
         invalid = set(v) - valid_providers
         if invalid:
             raise ValueError(f"Invalid providers: {invalid}. Valid providers: {valid_providers}")
@@ -83,15 +83,17 @@ class FallbackRequest(BaseModel):
         {
             "prompt": "What is AI?",
             "primary_provider": "openai",
-            "fallback_providers": ["anthropic"],
+            "primary_model": "gpt-4-turbo",
             "timeout": 10
         }
     """
 
     prompt: str = Field(..., min_length=1, max_length=10000, description="User prompt")
-    primary_provider: str = Field(default="openai", description="Primary provider to try first")
+    primary_provider: str = Field(
+        default="openai", description="Primary provider (only openai supported)"
+    )
     fallback_providers: list[str] = Field(
-        default=["anthropic"], description="Fallback providers in order"
+        default=[], description="Deprecated: fallback handled automatically"
     )
     primary_model: str | None = Field(
         default=None, description="Specific model for primary provider"

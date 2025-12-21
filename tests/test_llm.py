@@ -98,78 +98,102 @@ class TestOpenAIClient:
 
 
 # ============================================================================
-# Anthropic Client Tests
+# Fallback Orchestration Tests
 # ============================================================================
 
 
-class TestAnthropicClient:
-    """Tests for Anthropic API client."""
+class TestFallbackOrchestration:
+    """Tests for fallback orchestration (OpenAI-only with model fallback)."""
 
     @pytest.mark.asyncio
-    async def test_anthropic_generate_success(self, mock_anthropic_client):
-        """Test successful Anthropic text generation."""
-        from src.llm.clients import AnthropicClient
+    async def test_fallback_succeeds_with_primary_model(self, mock_openai_client):
+        """Test fallback orchestration succeeds with primary model."""
+        from unittest.mock import patch
 
-        client = AnthropicClient(api_client=mock_anthropic_client)
-        response = await client.generate(prompt="Hello, Claude!", temperature=0.7, max_tokens=100)
+        from src.llm.orchestrator import fallback_orchestration
 
-        assert response is not None
-        assert "content" in response
-        assert isinstance(response["content"], str)
-        assert len(response["content"]) > 0
+        with patch("src.llm.clients.AsyncOpenAI", return_value=mock_openai_client):
+            result = await fallback_orchestration(prompt="Test prompt", primary_model="gpt-4-turbo")
 
-    @pytest.mark.asyncio
-    async def test_anthropic_generate_includes_metadata(self, mock_anthropic_client):
-        """Test Anthropic response includes token usage."""
-        from src.llm.clients import AnthropicClient
-
-        client = AnthropicClient(api_client=mock_anthropic_client)
-        response = await client.generate(prompt="Test")
-
-        assert "usage" in response
-        assert "input_tokens" in response["usage"]
-        assert "output_tokens" in response["usage"]
-        assert "model" in response
+        assert result["content"] is not None
+        assert result["primary_success"] is True
+        assert result["fallback_triggered"] is False
+        assert result["is_default_message"] is False
+        assert result["provider_used"] == "openai"
 
     @pytest.mark.asyncio
-    async def test_anthropic_generate_normalizes_response(self, mock_anthropic_client):
-        """Test Anthropic responses are normalized to match OpenAI format."""
-        from src.llm.clients import AnthropicClient
+    async def test_fallback_uses_gpt35_when_primary_fails(
+        self, mock_openai_client_error, mock_openai_client
+    ):
+        """Test fallback to gpt-3.5-turbo when primary model fails."""
+        from unittest.mock import AsyncMock, patch
 
-        client = AnthropicClient(api_client=mock_anthropic_client)
-        response = await client.generate(prompt="Test")
+        from src.llm.orchestrator import fallback_orchestration
 
-        # Should have same structure as OpenAI response
-        assert "content" in response
-        assert "usage" in response
-        assert "model" in response
+        call_count = 0
+
+        async def mock_generate_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call (primary) fails
+                raise Exception("Primary model failed")
+            else:
+                # Second call (fallback) succeeds
+                return {
+                    "content": "Fallback response",
+                    "model": "gpt-3.5-turbo",
+                    "provider": "openai",
+                    "usage": {"prompt_tokens": 8, "completion_tokens": 15, "total_tokens": 23},
+                    "metrics": {"latency_ms": 150, "cost_usd": 0.00002},
+                }
+
+        mock_client = AsyncMock()
+        mock_client.generate = AsyncMock(side_effect=mock_generate_side_effect)
+
+        with patch("src.llm.clients.get_client", return_value=mock_client):
+            result = await fallback_orchestration(prompt="Test prompt", primary_model="gpt-4-turbo")
+
+        assert call_count == 2  # Primary + fallback
+        assert result["content"] == "Fallback response"
+        assert result["primary_success"] is False
+        assert result["fallback_triggered"] is True
+        assert result["is_default_message"] is False
 
     @pytest.mark.asyncio
-    async def test_anthropic_generate_handles_error(self, mock_anthropic_client_error):
-        """Test error handling for Anthropic API failures."""
-        from src.llm.clients import AnthropicClient
+    async def test_fallback_returns_default_message_when_all_fail(self):
+        """Test default message returned when all models fail."""
+        from unittest.mock import AsyncMock, patch
 
-        client = AnthropicClient(api_client=mock_anthropic_client_error)
+        from src.llm.orchestrator import fallback_orchestration
 
-        with pytest.raises(Exception) as exc_info:
-            await client.generate(prompt="Test")
+        mock_client = AsyncMock()
+        mock_client.generate = AsyncMock(side_effect=Exception("All models failed"))
 
-        assert "Anthropic API error" in str(exc_info.value)
+        with patch("src.llm.clients.get_client", return_value=mock_client):
+            result = await fallback_orchestration(prompt="Test prompt")
+
+        assert result["is_default_message"] is True
+        assert "Service temporarily unavailable" in result["content"]
+        assert result["provider_used"] == "default"
+        assert result["primary_success"] is False
+        assert result["fallback_triggered"] is True
 
     @pytest.mark.asyncio
-    async def test_anthropic_stream_generates_tokens(self, mock_anthropic_stream):
-        """Test Anthropic streaming returns tokens incrementally."""
-        from src.llm.clients import AnthropicClient
+    async def test_fallback_includes_error_details(self):
+        """Test fallback response includes error details from failed attempts."""
+        from unittest.mock import AsyncMock, patch
 
-        client = AnthropicClient(api_client=Mock())
-        client._client.messages.create = Mock(return_value=mock_anthropic_stream)
+        from src.llm.orchestrator import fallback_orchestration
 
-        tokens = []
-        async for token in client.generate_stream(prompt="Test"):
-            tokens.append(token)
+        mock_client = AsyncMock()
+        mock_client.generate = AsyncMock(side_effect=Exception("API rate limit exceeded"))
 
-        assert len(tokens) > 0
-        assert all(isinstance(t, str) for t in tokens)
+        with patch("src.llm.clients.get_client", return_value=mock_client):
+            result = await fallback_orchestration(prompt="Test prompt")
+
+        assert "primary_error" in result
+        assert "API rate limit exceeded" in result["primary_error"]
 
 
 # ============================================================================
@@ -201,142 +225,10 @@ class TestBaseLLMClient:
 
 
 # ============================================================================
-# Parallel Orchestration Tests
+# Parallel Orchestration Tests - DISABLED (OpenAI-only mode)
 # ============================================================================
-
-
-class TestParallelOrchestration:
-    """Tests for parallel LLM orchestration."""
-
-    @pytest.mark.asyncio
-    async def test_parallel_calls_multiple_providers(self, mock_all_llm_clients):
-        """Test parallel orchestration calls multiple providers."""
-        from src.llm.orchestrator import parallel_orchestration
-
-        openai_client, anthropic_client = mock_all_llm_clients
-
-        results = await parallel_orchestration(
-            prompt="Test prompt", providers=["openai", "anthropic"]
-        )
-
-        assert len(results) == 2
-        assert results[0]["provider"] in ["openai", "anthropic"]
-        assert results[1]["provider"] in ["openai", "anthropic"]
-
-    @pytest.mark.asyncio
-    async def test_parallel_returns_fastest_first(self, mock_all_llm_clients):
-        """Test parallel orchestration returns fastest response first."""
-        from src.llm.orchestrator import parallel_orchestration
-
-        # Configure mock to have different latencies
-        openai_client, anthropic_client = mock_all_llm_clients
-
-        results = await parallel_orchestration(prompt="Test", providers=["openai", "anthropic"])
-
-        # Results should be ordered by latency (fastest first)
-        assert results[0]["latency_ms"] <= results[1]["latency_ms"]
-
-    @pytest.mark.asyncio
-    async def test_parallel_handles_partial_failure(
-        self, mock_openai_client, mock_anthropic_client_error
-    ):
-        """Test parallel orchestration continues if one provider fails."""
-        from src.llm.orchestrator import parallel_orchestration
-
-        results = await parallel_orchestration(prompt="Test", providers=["openai", "anthropic"])
-
-        # Should have one successful result
-        successful_results = [r for r in results if "error" not in r]
-        assert len(successful_results) == 1
-        assert successful_results[0]["provider"] == "openai"
-
-    @pytest.mark.asyncio
-    async def test_parallel_aggregates_costs(self, mock_all_llm_clients):
-        """Test parallel orchestration aggregates costs."""
-        from src.llm.orchestrator import parallel_orchestration
-
-        results = await parallel_orchestration(prompt="Test", providers=["openai", "anthropic"])
-
-        total_cost = sum(r.get("cost_usd", 0) for r in results)
-        assert total_cost > 0
-
-    @pytest.mark.asyncio
-    async def test_parallel_uses_asyncio_gather(self, mock_all_llm_clients):
-        """Test parallel orchestration uses asyncio.gather for concurrency."""
-        from unittest.mock import patch
-
-        from src.llm.orchestrator import parallel_orchestration
-
-        with patch("asyncio.gather", wraps=asyncio.gather) as mock_gather:
-            await parallel_orchestration(prompt="Test", providers=["openai", "anthropic"])
-
-            # Verify asyncio.gather was called
-            assert mock_gather.called
-
-
-# ============================================================================
-# Fallback Orchestration Tests
-# ============================================================================
-
-
-class TestFallbackOrchestration:
-    """Tests for fallback LLM orchestration."""
-
-    @pytest.mark.asyncio
-    async def test_fallback_uses_primary_when_available(self, mock_openai_client):
-        """Test fallback uses primary provider when it succeeds."""
-        from src.llm.orchestrator import fallback_orchestration
-
-        result = await fallback_orchestration(
-            prompt="Test", primary_provider="openai", fallback_providers=["anthropic"]
-        )
-
-        assert result["provider"] == "openai"
-        assert result["fallback_triggered"] is False
-
-    @pytest.mark.asyncio
-    async def test_fallback_triggers_on_primary_failure(
-        self, mock_openai_client_error, mock_anthropic_client
-    ):
-        """Test fallback triggers when primary provider fails."""
-        from src.llm.orchestrator import fallback_orchestration
-
-        result = await fallback_orchestration(
-            prompt="Test", primary_provider="openai", fallback_providers=["anthropic"]
-        )
-
-        assert result["provider"] == "anthropic"
-        assert result["fallback_triggered"] is True
-        assert "primary_error" in result
-
-    @pytest.mark.asyncio
-    async def test_fallback_tries_multiple_fallbacks(
-        self, mock_openai_client_error, mock_anthropic_client_error
-    ):
-        """Test fallback tries multiple fallback providers in order."""
-        from src.llm.orchestrator import fallback_orchestration
-
-        # Assuming we add a third provider later
-        with pytest.raises(Exception) as exc_info:
-            await fallback_orchestration(
-                prompt="Test", primary_provider="openai", fallback_providers=["anthropic"]
-            )
-
-        assert "All providers failed" in str(exc_info.value)
-
-    @pytest.mark.asyncio
-    async def test_fallback_respects_timeout(
-        self, mock_openai_client_timeout, mock_anthropic_client
-    ):
-        """Test fallback triggers on timeout."""
-        from src.llm.orchestrator import fallback_orchestration
-
-        result = await fallback_orchestration(
-            prompt="Test", primary_provider="openai", fallback_providers=["anthropic"], timeout=5
-        )
-
-        assert result["provider"] == "anthropic"
-        assert result["fallback_triggered"] is True
+# Parallel orchestration requires multiple providers and is not available
+# in OpenAI-only mode. Tests removed.
 
 
 # ============================================================================
@@ -453,21 +345,6 @@ class TestResponseNormalization:
         assert normalized["content"] == "Hello"
         assert normalized["usage"]["prompt_tokens"] == 10
 
-    def test_normalize_anthropic_response(self):
-        """Test Anthropic response normalization."""
-        from src.llm.utils import normalize_response
-
-        raw_response = {
-            "content": [{"text": "Hello from Claude"}],
-            "usage": {"input_tokens": 10, "output_tokens": 20},
-        }
-
-        normalized = normalize_response(raw_response, provider="anthropic")
-
-        assert normalized["content"] == "Hello from Claude"
-        assert normalized["usage"]["prompt_tokens"] == 10
-        assert normalized["usage"]["completion_tokens"] == 20
-
 
 # ============================================================================
 # Model Configuration Tests
@@ -479,7 +356,7 @@ class TestModelConfiguration:
 
     def test_get_model_config(self):
         """Test retrieving model configuration."""
-        from src.llm.config import get_model_config
+        from src.utils.config import get_model_config
 
         config = get_model_config("gpt-4-turbo")
 
@@ -490,17 +367,19 @@ class TestModelConfiguration:
 
     def test_list_available_models(self):
         """Test listing all available models."""
-        from src.llm.config import list_models
+        from src.utils.config import list_models
 
         models = list_models()
 
         assert len(models) > 0
         assert any(m["id"] == "gpt-4-turbo" for m in models)
-        assert any(m["id"] == "claude-3-opus" for m in models)
+        assert any(m["id"] == "gpt-3.5-turbo" for m in models)
+        # Should not have Claude models
+        assert not any("claude" in m["id"] for m in models)
 
     def test_validate_model_exists(self):
         """Test model validation."""
-        from src.llm.config import validate_model
+        from src.utils.config import validate_model
 
         assert validate_model("gpt-4-turbo") is True
         assert validate_model("unknown-model") is False

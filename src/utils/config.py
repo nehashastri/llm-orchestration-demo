@@ -6,7 +6,7 @@ type-safe access to configuration throughout the application.
 
 Environment variables required:
 - OPENAI_API_KEY: OpenAI API key
-- ANTHROPIC_API_KEY: Anthropic API key
+
 
 Optional environment variables:
 - ENVIRONMENT: development/production (default: development)
@@ -35,8 +35,7 @@ class Settings(BaseSettings):
     """
 
     # API Keys (Required)
-    openai_api_key: str
-    anthropic_api_key: str
+    openai_api_key: str = ""
 
     # Environment Configuration
     environment: Literal["development", "production", "testing"] = "development"
@@ -85,22 +84,6 @@ MODEL_CONFIGS = {
         "max_tokens": 4096,
         "cost_per_1m_prompt": 0.001,
         "cost_per_1m_completion": 0.002,
-        "supports_streaming": True,
-        "timeout": 30,
-    },
-    "claude-3-opus": {
-        "provider": "anthropic",
-        "max_tokens": 4096,
-        "cost_per_1m_prompt": 0.015,
-        "cost_per_1m_completion": 0.075,
-        "supports_streaming": True,
-        "timeout": 30,
-    },
-    "claude-3-sonnet": {
-        "provider": "anthropic",
-        "max_tokens": 4096,
-        "cost_per_1m_prompt": 0.003,
-        "cost_per_1m_completion": 0.015,
         "supports_streaming": True,
         "timeout": 30,
     },
@@ -174,7 +157,7 @@ def get_provider_for_model(model_id: str) -> str:
         model_id: Model identifier
 
     Returns:
-        Provider name ("openai" or "anthropic")
+        Provider name ("openai")
     """
     config = get_model_config(model_id)
     return config["provider"]
