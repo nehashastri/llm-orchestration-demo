@@ -1,5 +1,5 @@
 """
-"""LLM client implementations for OpenAI.
+LLM client implementations for OpenAI.
 
 Provides a unified interface for interacting with OpenAI models,
 handling response normalization, error handling, and streaming.
