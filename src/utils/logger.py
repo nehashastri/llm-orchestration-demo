@@ -33,7 +33,6 @@ def setup_logging() -> None:
     shared_processors = [
         structlog.contextvars.merge_contextvars,  # Add context vars
         structlog.stdlib.add_log_level,  # Add log level
-        structlog.stdlib.add_logger_name,  # Add logger name
         structlog.processors.TimeStamper(fmt="iso"),  # ISO timestamp
         structlog.processors.StackInfoRenderer(),  # Stack traces
         structlog.processors.format_exc_info,  # Exception formatting

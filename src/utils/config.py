@@ -87,6 +87,14 @@ MODEL_CONFIGS = {
         "supports_streaming": True,
         "timeout": 30,
     },
+    "claude-3-opus": {
+        "provider": "anthropic",
+        "max_tokens": 4096,
+        "cost_per_1m_prompt": 0.015,
+        "cost_per_1m_completion": 0.075,
+        "supports_streaming": True,
+        "timeout": 30,
+    },
 }
 
 

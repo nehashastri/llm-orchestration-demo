@@ -108,14 +108,19 @@ class OpenAIClient(BaseLLMClient):
     Supports both chat completions and streaming responses.
     """
 
-    def __init__(self, api_key: str | None = None):
+    def __init__(self, api_key: str | None = None, api_client: AsyncOpenAI | None = None):
         """
         Initialize OpenAI client.
 
         Args:
             api_key: OpenAI API key (uses settings.openai_api_key if None)
+            api_client: Pre-configured AsyncOpenAI client (for testing)
         """
-        self._client = AsyncOpenAI(api_key=api_key or settings.openai_api_key)
+        self._client = (
+            api_client
+            if api_client is not None
+            else AsyncOpenAI(api_key=api_key or settings.openai_api_key)
+        )
 
     @property
     def provider(self) -> str:

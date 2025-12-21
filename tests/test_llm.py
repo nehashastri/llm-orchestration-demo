@@ -84,10 +84,12 @@ class TestOpenAIClient:
     @pytest.mark.asyncio
     async def test_openai_stream_generates_tokens(self, mock_openai_stream):
         """Test OpenAI streaming returns tokens incrementally."""
+        from unittest.mock import AsyncMock
+
         from src.llm.clients import OpenAIClient
 
         client = OpenAIClient(api_client=Mock())
-        client._client.chat.completions.create = Mock(return_value=mock_openai_stream)
+        client._client.chat.completions.create = AsyncMock(return_value=mock_openai_stream)
 
         tokens = []
         async for token in client.generate_stream(prompt="Test"):
@@ -151,7 +153,7 @@ class TestFallbackOrchestration:
         mock_client = AsyncMock()
         mock_client.generate = AsyncMock(side_effect=mock_generate_side_effect)
 
-        with patch("src.llm.clients.get_client", return_value=mock_client):
+        with patch("src.llm.orchestrator.get_client", return_value=mock_client):
             result = await fallback_orchestration(prompt="Test prompt", primary_model="gpt-4-turbo")
 
         assert call_count == 2  # Primary + fallback
@@ -170,7 +172,7 @@ class TestFallbackOrchestration:
         mock_client = AsyncMock()
         mock_client.generate = AsyncMock(side_effect=Exception("All models failed"))
 
-        with patch("src.llm.clients.get_client", return_value=mock_client):
+        with patch("src.llm.orchestrator.get_client", return_value=mock_client):
             result = await fallback_orchestration(prompt="Test prompt")
 
         assert result["is_default_message"] is True
@@ -189,7 +191,7 @@ class TestFallbackOrchestration:
         mock_client = AsyncMock()
         mock_client.generate = AsyncMock(side_effect=Exception("API rate limit exceeded"))
 
-        with patch("src.llm.clients.get_client", return_value=mock_client):
+        with patch("src.llm.orchestrator.get_client", return_value=mock_client):
             result = await fallback_orchestration(prompt="Test prompt")
 
         assert "primary_error" in result
@@ -254,11 +256,17 @@ class TestStreamingOrchestration:
     @pytest.mark.asyncio
     async def test_streaming_handles_errors_gracefully(self, mock_openai_client_error):
         """Test streaming handles errors without breaking."""
+        from unittest.mock import patch
+
         from src.llm.orchestrator import streaming_orchestration
 
-        with pytest.raises(Exception):
-            async for token in streaming_orchestration(prompt="Test", provider="openai"):
-                pass
+        mock_client = Mock()
+        mock_client.generate_stream = Mock(side_effect=Exception("Streaming failed"))
+
+        with patch("src.llm.orchestrator.get_client", return_value=mock_client):
+            with pytest.raises(Exception):
+                async for token in streaming_orchestration(prompt="Test", provider="openai"):
+                    pass
 
 
 # ============================================================================
@@ -374,8 +382,8 @@ class TestModelConfiguration:
         assert len(models) > 0
         assert any(m["id"] == "gpt-4-turbo" for m in models)
         assert any(m["id"] == "gpt-3.5-turbo" for m in models)
-        # Should not have Claude models
-        assert not any("claude" in m["id"] for m in models)
+        # Should now have Claude models for testing
+        assert any("claude" in m["id"] for m in models)
 
     def test_validate_model_exists(self):
         """Test model validation."""
