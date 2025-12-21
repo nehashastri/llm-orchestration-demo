@@ -1,0 +1,27 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+__pycache__/
+*.py[cod]
+.Python
+*.so
+*.egg-info/
+dist/
+build/
+
+.env
+.venv
+.pixi/
+
+.vscode/
+.idea/
+*.swp
+
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+*.log
+.DS_Store
+Thumbs.db

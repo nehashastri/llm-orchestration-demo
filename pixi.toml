@@ -1,0 +1,40 @@
+[environments]
+default = []
+dev = ["dev"]
+
+[workspace]
+name = "llm-orchestration-demo"
+version = "0.1.0"
+description = "FastAPI + LLM Orchestration for Interview"
+channels = ["conda-forge"]
+platforms = ["win-64"]
+
+[dependencies]
+python = "3.11.*"
+fastapi = ">=0.115.0"
+uvicorn = ">=0.32.0"
+uvicorn-standard = "*"
+pydantic = ">=2.10.0"
+pydantic-settings = ">=2.6.0"
+openai = ">=1.54.0"
+anthropic = ">=0.39.0"
+httpx = ">=0.27.0"
+python-dotenv = ">=1.0.0"
+python-multipart = ">=0.0.12"
+
+[feature.dev.dependencies]
+pytest = ">=8.3.0"
+pytest-asyncio = ">=0.24.0"
+pytest-cov = ">=6.0.0"
+pytest-mock = ">=3.14.0"
+ruff = ">=0.8.0"
+mypy = ">=1.13.0"
+
+[feature.dev.tasks]
+dev = "uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000"
+test = "pytest tests/ -v"
+test-cov = "pytest tests/ --cov=src --cov-report=html"
+format = "ruff format src/ tests/ examples/"
+lint = "ruff check src/ tests/ examples/ --fix"
+typecheck = "mypy src/"
+check = {depends-on = ["format", "lint", "typecheck"]}
