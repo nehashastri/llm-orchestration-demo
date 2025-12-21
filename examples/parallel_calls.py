@@ -2,9 +2,14 @@
 Parallel LLM orchestration with asyncio.gather().
 Copilot: Reference this for multi-model consensus or parallel tasks.
 """
+
 import asyncio
-from openai import AsyncOpenAI
+from typing import cast
+
 from anthropic import AsyncAnthropic
+from anthropic.types import TextBlock
+from openai import AsyncOpenAI
+
 
 async def call_openai(prompt: str) -> dict:
     """Call OpenAI API."""
@@ -23,25 +28,26 @@ async def call_anthropic(prompt: str) -> dict:
         messages=[{"role": "user", "content": prompt}],
         max_tokens=500
     )
-    return {"provider": "anthropic", "content": response.content[0].text}
+    text_content = next((block.text for block in response.content if isinstance(block, TextBlock)), "")
+    return {"provider": "anthropic", "content": text_content}
 
 async def parallel_orchestration(prompt: str) -> list[dict]:
     """
     Call multiple LLMs in parallel and aggregate results.
-    
+
     Latency: max(2s, 2s) = 2s (instead of 2s + 2s = 4s)
     """
     tasks = [
         call_openai(prompt),
         call_anthropic(prompt)
     ]
-    
+
     # Run in parallel
     results = await asyncio.gather(*tasks, return_exceptions=True)
-    
+
     # Filter out errors
     valid_results = [r for r in results if not isinstance(r, Exception)]
-    return valid_results
+    return cast(list[dict], valid_results)
 
 if __name__ == "__main__":
     results = asyncio.run(parallel_orchestration("Explain async/await"))

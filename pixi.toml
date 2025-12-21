@@ -1,5 +1,5 @@
 [environments]
-default = []
+default = ["dev"]
 dev = ["dev"]
 
 [workspace]
