@@ -62,7 +62,29 @@ def setup_logging() -> None:
         encoding="utf-8",
         utc=False,
     )
+    # Rotate at midnight and name rotated files with the date
     file_handler.suffix = "%Y-%m-%d"
+
+    def _date_namer(name: str) -> str:
+        """Rename rotated files to include date before the extension.
+
+        TimedRotatingFileHandler produces names like:
+            <log_dir>/app.log.YYYY-MM-DD
+        We convert them to:
+            <log_dir>/app-YYYY-MM-DD.log
+        """
+        p = Path(name)
+        fname = p.name
+        if ".log." in fname:
+            base, date = fname.split(".log.", 1)
+            return str(p.parent / f"{base}-{date}.log")
+        # Fallback: best-effort transformation
+        parts = fname.split(".")
+        base = parts[0] if parts else "app"
+        date = parts[-1] if parts else "unknown"
+        return str(p.parent / f"{base}-{date}.log")
+
+    file_handler.namer = _date_namer
 
     formatter = structlog.stdlib.ProcessorFormatter(
         processor=renderer,

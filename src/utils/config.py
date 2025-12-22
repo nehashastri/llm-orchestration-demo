@@ -103,6 +103,23 @@ MODEL_CONFIGS = {
         "supports_streaming": True,
         "timeout": 30,
     },
+    # Anthropic Claude models for testing and configuration
+    "claude-3-opus": {
+        "provider": "anthropic",
+        "max_tokens": 200000,
+        "cost_per_1m_prompt_tokens": 15.0,
+        "cost_per_1m_completion_tokens": 75.0,
+        "supports_streaming": True,
+        "timeout": 30,
+    },
+    "claude-3-haiku": {
+        "provider": "anthropic",
+        "max_tokens": 200000,
+        "cost_per_1m_prompt_tokens": 0.25,
+        "cost_per_1m_completion_tokens": 1.25,
+        "supports_streaming": True,
+        "timeout": 30,
+    },
 }
 
 

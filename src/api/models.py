@@ -7,7 +7,7 @@ documentation, and serialization.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # ============================================================================
 # Request Models
@@ -55,13 +55,29 @@ class ParallelRequest(BaseModel):
         default=1,
         description="Parallel strategy version (1=race 4o vs 4o-mini, 2=all three models)",
     )
+    # Optional explicit models for OpenAI; alternatively choose by providers
     models: list[str] | None = Field(
         default=None,
         description="Optional explicit list of OpenAI models to fan out to",
     )
+    # Providers to fan out to; must be non-empty and valid
+    providers: list[str] = Field(
+        default=["openai"],
+        min_length=1,
+        description="Providers to call in parallel (e.g., 'openai', 'anthropic')",
+    )
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: int = Field(default=500, ge=1, le=4000, description="Maximum tokens")
     system_prompt: str | None = Field(default=None, description="System instructions")
+
+    @field_validator("providers")
+    def _validate_providers(cls, v: list[str]) -> list[str]:
+        allowed = {"openai", "anthropic"}
+        invalid = [p for p in v if p not in allowed]
+        if invalid:
+            # Match tests expecting this message substring
+            raise ValueError(f"Invalid providers: {', '.join(invalid)}")
+        return v
 
 
 class FallbackRequest(BaseModel):

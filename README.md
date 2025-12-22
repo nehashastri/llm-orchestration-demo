@@ -190,6 +190,11 @@ json{
   "prompt_tokens": 150,
   "completion_tokens": 300
 }
+Log Files
+The service writes logs to the `logs` directory with daily rotation:
+- Active file: `logs/app.log`
+- Rotated files: `logs/app-YYYY-MM-DD.log` (e.g., `app-2025-12-21.log`)
+At midnight, the current `app.log` rolls over to the dated file, so yesterday's logs are always available as a separate file.
 View Statistics
 bashcurl http://localhost:8000/stats
 Returns:
