@@ -287,14 +287,13 @@ class TestCostCalculation:
         expected = (1000 / 1_000_000 * 0.03) + (500 / 1_000_000 * 0.06)
         assert abs(cost - expected) < 0.0001
 
-    def test_calculate_anthropic_cost(self):
-        """Test Anthropic cost calculation."""
+    def test_calculate_openai_mini_cost(self):
+        """Test cost calculation for gpt-4o-mini."""
         from src.llm.utils import calculate_cost
 
-        cost = calculate_cost(model="claude-3-opus", prompt_tokens=1000, completion_tokens=500)
+        cost = calculate_cost(model="gpt-4o-mini", prompt_tokens=1000, completion_tokens=500)
 
-        # Claude 3 Opus: $0.015 per 1M input, $0.075 per 1M output
-        expected = (1000 / 1_000_000 * 0.015) + (500 / 1_000_000 * 0.075)
+        expected = (1000 / 1_000_000 * 0.15) + (500 / 1_000_000 * 0.6)
         assert abs(cost - expected) < 0.0001
 
     def test_calculate_cost_unknown_model_raises_error(self):

@@ -193,7 +193,7 @@ def sample_parallel_request():
     """
     return {
         "prompt": "Write a haiku about coding",
-        "providers": ["openai", "anthropic"],
+        "version": 1,
         "temperature": 0.8,
         "max_tokens": 100,
     }

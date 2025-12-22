@@ -280,21 +280,103 @@ class TestFallbackEndpoint:
 
 
 class TestParallelEndpoint:
-    """Tests for the /chat/parallel endpoint (disabled in OpenAI-only mode)."""
+    """Tests for the /chat/parallel endpoint."""
 
-    def test_parallel_returns_501(self, client):
-        """Test parallel endpoint returns 501 Not Implemented."""
+    @patch("src.api.routes.parallel_orchestration")
+    def test_parallel_version_1_returns_fastest(self, mock_parallel, client):
+        """Test parallel endpoint (v1) returns 200 and winner info."""
+        mock_parallel.return_value = {
+            "content": "Fast response",
+            "winner": {"provider": "openai", "model": "gpt-4o", "latency_ms": 120.5},
+            "all_responses": [
+                {
+                    "content": "Fast response",
+                    "model": "gpt-4o",
+                    "provider": "openai",
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 20, "total_tokens": 30},
+                    "metrics": {"latency_ms": 120.5, "cost_usd": 0.0005},
+                },
+                {
+                    "content": "Slower",
+                    "model": "gpt-4o-mini",
+                    "provider": "openai",
+                    "usage": {"prompt_tokens": 9, "completion_tokens": 18, "total_tokens": 27},
+                    "metrics": {"latency_ms": 200.0, "cost_usd": 0.0001},
+                },
+            ],
+            "errors": None,
+            "metrics": {
+                "total_latency_ms": 200.0,
+                "total_cost_usd": 0.0006,
+                "num_providers_called": 2,
+                "num_successful": 2,
+                "num_failed": 0,
+            },
+        }
+
         response = client.post(
             "/chat/parallel",
             json={
                 "prompt": "Test parallel",
-                "providers": ["openai"],
+                "version": 1,
             },
         )
 
-        assert response.status_code == 501
+        assert response.status_code == 200
         data = response.json()
-        assert "not available" in data["detail"].lower()
+        assert data["winner"]["model"] == "gpt-4o"
+        assert len(data["all_responses"]) == 2
+
+    @patch("src.api.routes.parallel_orchestration")
+    def test_parallel_version_2_runs_three_models(self, mock_parallel, client):
+        """Test parallel endpoint (v2) aggregates three models."""
+        mock_parallel.return_value = {
+            "content": "Turbo response",
+            "winner": {"provider": "openai", "model": "gpt-4o-mini", "latency_ms": 90.0},
+            "all_responses": [
+                {
+                    "content": "Turbo response",
+                    "model": "gpt-4o-mini",
+                    "provider": "openai",
+                    "usage": {"prompt_tokens": 8, "completion_tokens": 12, "total_tokens": 20},
+                    "metrics": {"latency_ms": 90.0, "cost_usd": 0.00008},
+                },
+                {
+                    "content": "4o response",
+                    "model": "gpt-4o",
+                    "provider": "openai",
+                    "usage": {"prompt_tokens": 10, "completion_tokens": 16, "total_tokens": 26},
+                    "metrics": {"latency_ms": 150.0, "cost_usd": 0.0003},
+                },
+                {
+                    "content": "4-turbo response",
+                    "model": "gpt-4-turbo",
+                    "provider": "openai",
+                    "usage": {"prompt_tokens": 11, "completion_tokens": 14, "total_tokens": 25},
+                    "metrics": {"latency_ms": 180.0, "cost_usd": 0.0005},
+                },
+            ],
+            "errors": [],
+            "metrics": {
+                "total_latency_ms": 180.0,
+                "total_cost_usd": 0.00088,
+                "num_providers_called": 3,
+                "num_successful": 3,
+                "num_failed": 0,
+            },
+        }
+
+        response = client.post(
+            "/chat/parallel",
+            json={
+                "prompt": "Test parallel",
+                "version": 2,
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["metrics"]["num_providers_called"] == 3
 
 
 # ============================================================================

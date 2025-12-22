@@ -14,6 +14,8 @@ Usage:
 
 import logging
 import sys
+from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -29,41 +31,62 @@ def setup_logging() -> None:
     Production: JSON-formatted logs for parsing/aggregation
     """
 
-    # Shared processors for all environments
+    # Ensure log directory exists
+    log_dir = Path(getattr(settings, "log_dir", "logs"))
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "app.log"
+
+    # Renderer selection
+    renderer = (
+        structlog.dev.ConsoleRenderer(colors=True)
+        if is_development()
+        else structlog.processors.JSONRenderer()
+    )
+
+    # Shared processors (pre-chain for stdlib logging)
     shared_processors = [
-        structlog.contextvars.merge_contextvars,  # Add context vars
-        structlog.stdlib.add_log_level,  # Add log level
-        structlog.processors.TimeStamper(fmt="iso"),  # ISO timestamp
-        structlog.processors.StackInfoRenderer(),  # Stack traces
-        structlog.processors.format_exc_info,  # Exception formatting
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
     ]
 
-    # Development: Pretty console output
-    if is_development():
-        processors = shared_processors + [structlog.dev.ConsoleRenderer(colors=True)]
-    # Production: JSON output
-    else:
-        processors = shared_processors + [
-            structlog.processors.dict_tracebacks,  # Format tracebacks as dicts
-            structlog.processors.JSONRenderer(),  # JSON output
-        ]
+    # Handlers: console + daily rotating file
+    console_handler = logging.StreamHandler(sys.stdout)
+    file_handler = TimedRotatingFileHandler(
+        filename=log_file,
+        when="midnight",
+        interval=1,
+        backupCount=7,
+        encoding="utf-8",
+        utc=False,
+    )
+    file_handler.suffix = "%Y-%m-%d"
 
-    # Configure structlog
+    formatter = structlog.stdlib.ProcessorFormatter(
+        processor=renderer,
+        foreign_pre_chain=shared_processors,
+    )
+    console_handler.setFormatter(formatter)
+    file_handler.setFormatter(formatter)
+
+    logging.basicConfig(
+        level=logging.getLevelName(settings.log_level),
+        handlers=[console_handler, file_handler],
+    )
+
     structlog.configure(
-        processors=processors,
+        processors=[
+            *shared_processors,
+            structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
+        ],
         wrapper_class=structlog.make_filtering_bound_logger(
             logging.getLevelName(settings.log_level)
         ),
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(file=sys.stdout),
+        logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
-    )
-
-    # Configure standard logging to play nice with structlog
-    logging.basicConfig(
-        format="%(message)s",
-        level=logging.getLevelName(settings.log_level),
-        handlers=[logging.StreamHandler(sys.stdout)],
     )
 
 

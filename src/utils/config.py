@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     # LLM Defaults
-    default_model: str = "gpt-4-turbo"
+    default_model: str = "gpt-4o"
     default_temperature: float = 0.7
     default_max_tokens: int = 500
     default_timeout: int = 30  # seconds
@@ -71,9 +71,25 @@ class Settings(BaseSettings):
 # Model Configuration
 # Cost per 1M tokens (as of 2024)
 MODEL_CONFIGS = {
+    "gpt-4o": {
+        "provider": "openai",
+        "max_tokens": 128000,
+        "cost_per_1m_prompt_tokens": 5.0,
+        "cost_per_1m_completion_tokens": 15.0,
+        "supports_streaming": True,
+        "timeout": 30,
+    },
+    "gpt-4o-mini": {
+        "provider": "openai",
+        "max_tokens": 128000,
+        "cost_per_1m_prompt_tokens": 0.15,
+        "cost_per_1m_completion_tokens": 0.6,
+        "supports_streaming": True,
+        "timeout": 30,
+    },
     "gpt-4-turbo": {
         "provider": "openai",
-        "max_tokens": 4096,
+        "max_tokens": 128000,
         "cost_per_1m_prompt_tokens": 0.03,
         "cost_per_1m_completion_tokens": 0.06,
         "supports_streaming": True,
@@ -84,14 +100,6 @@ MODEL_CONFIGS = {
         "max_tokens": 4096,
         "cost_per_1m_prompt_tokens": 0.001,
         "cost_per_1m_completion_tokens": 0.002,
-        "supports_streaming": True,
-        "timeout": 30,
-    },
-    "claude-3-opus": {
-        "provider": "anthropic",
-        "max_tokens": 4096,
-        "cost_per_1m_prompt_tokens": 0.015,
-        "cost_per_1m_completion_tokens": 0.075,
         "supports_streaming": True,
         "timeout": 30,
     },

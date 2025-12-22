@@ -7,7 +7,7 @@ documentation, and serialization.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 # ============================================================================
 # Request Models
@@ -45,34 +45,23 @@ class ParallelRequest(BaseModel):
     Example:
         {
             "prompt": "Write a haiku",
-            "providers": ["openai"],
+            "version": 1,
             "temperature": 0.8
         }
     """
 
     prompt: str = Field(..., min_length=1, max_length=10000, description="User prompt")
-    providers: list[str] = Field(
-        default=["openai"],
-        min_length=1,
-        description="List of providers to query in parallel (only openai supported)",
+    version: Literal[1, 2] = Field(
+        default=1,
+        description="Parallel strategy version (1=race 4o vs 4o-mini, 2=all three models)",
+    )
+    models: list[str] | None = Field(
+        default=None,
+        description="Optional explicit list of OpenAI models to fan out to",
     )
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: int = Field(default=500, ge=1, le=4000, description="Maximum tokens")
     system_prompt: str | None = Field(default=None, description="System instructions")
-
-    @field_validator("providers")
-    @classmethod
-    def validate_providers(cls, v):
-        """Ensure providers list is not empty and contains valid providers."""
-        if not v:
-            raise ValueError("providers list cannot be empty")
-
-        valid_providers = {"openai"}
-        invalid = set(v) - valid_providers
-        if invalid:
-            raise ValueError(f"Invalid providers: {invalid}. Valid providers: {valid_providers}")
-
-        return v
 
 
 class FallbackRequest(BaseModel):

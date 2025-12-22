@@ -29,6 +29,7 @@ from src.api.state import get_uptime_seconds, stats, update_provider_stats
 from src.llm.clients import get_client
 from src.llm.orchestrator import (
     fallback_orchestration,
+    parallel_orchestration,
     streaming_orchestration,
 )
 from src.utils.config import get_provider_for_model, list_models, settings
@@ -138,30 +139,67 @@ async def chat_completion(request_body: ChatRequest, request: Request):
 
 
 # ============================================================================
-# Parallel Orchestration - DISABLED (OpenAI-only mode)
+# Parallel Orchestration
 # ============================================================================
 
 
 @router.post(
     "/chat/parallel",
     response_model=ParallelResponse,
-    status_code=status.HTTP_501_NOT_IMPLEMENTED,
+    status_code=status.HTTP_200_OK,
     tags=["Chat"],
-    summary="Parallel orchestration (disabled)",
-    description="Not available in OpenAI-only mode",
+    summary="Parallel orchestration",
+    description="Fan-out a prompt to multiple OpenAI models in parallel and return the fastest success",
 )
 async def parallel_chat(request_body: ParallelRequest, request: Request):
     """
-    Parallel orchestration is disabled in OpenAI-only mode.
+    Execute parallel orchestration.
 
-    Use /chat/fallback endpoint for reliability instead.
+    version 1 races gpt-4o vs gpt-4o-mini (first success wins).
+    version 2 runs gpt-4o, gpt-4-turbo, gpt-4o-mini and picks the fastest success.
     """
-    from fastapi import HTTPException
-
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Parallel orchestration is not available in OpenAI-only mode. Use /chat/fallback instead.",
+    logger.info(
+        "parallel_request",
+        version=request_body.version,
+        models=request_body.models,
+        request_id=request.state.request_id,
     )
+
+    result = await parallel_orchestration(
+        prompt=request_body.prompt,
+        version=request_body.version,
+        models=request_body.models,
+        temperature=request_body.temperature,
+        max_tokens=request_body.max_tokens,
+        system_prompt=request_body.system_prompt,
+    )
+
+    update_provider_stats(result["winner"]["provider"], result["metrics"]["total_cost_usd"])
+
+    responses = [
+        ChatResponse(
+            content=item["content"],
+            model=item["model"],
+            provider=item.get("provider", "openai"),
+            usage=TokenUsage(**item["usage"]),
+            metrics=Metrics(**item["metrics"]),
+            metadata=Metadata(
+                request_id=request.state.request_id,
+                timestamp=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            ),
+        )
+        for item in result["all_responses"]
+    ]
+
+    response = ParallelResponse(
+        content=result["content"],
+        winner=result["winner"],
+        all_responses=responses,
+        errors=result["errors"],
+        metrics=result["metrics"],
+    )
+
+    return response
 
 
 # ============================================================================
