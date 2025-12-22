@@ -96,8 +96,8 @@ class BaseLLMClient(ABC):
             Cost in USD
         """
         config = get_model_config(model)
-        prompt_cost = (prompt_tokens / 1_000_000) * config["cost_per_1m_prompt"]
-        completion_cost = (completion_tokens / 1_000_000) * config["cost_per_1m_completion"]
+        prompt_cost = (prompt_tokens / 1_000_000) * config["cost_per_1m_prompt_tokens"]
+        completion_cost = (completion_tokens / 1_000_000) * config["cost_per_1m_completion_tokens"]
         return prompt_cost + completion_cost
 
 

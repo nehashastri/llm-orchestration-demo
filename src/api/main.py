@@ -14,22 +14,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from src.api.routes import router
+from src.api.state import stats
 from src.utils.config import settings
 from src.utils.logger import get_logger, log_api_request
 
 logger = get_logger(__name__)
 
-# Track app start time for uptime calculation
-app_start_time = time.time()
+"""App definition and configuration.
 
-# Statistics tracking (in production, use Redis or database)
-stats = {
-    "total_requests": 0,
-    "requests_by_provider": {},
-    "total_cost_usd": 0.0,
-    "total_latency_ms": 0.0,
-    "errors": 0,
-}
+Uses shared runtime state from src.api.state to avoid circular imports.
+"""
 
 
 @asynccontextmanager
@@ -163,7 +158,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     stats["errors"] += 1
 
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=422,
         content={
             "error": "validation_error",
             "message": message,
@@ -251,23 +246,4 @@ async def general_exception_handler(request: Request, exc: Exception):
     )
 
 
-# ============================================================================
-# Utility Functions
-# ============================================================================
-
-
-def get_uptime_seconds() -> int:
-    """Get application uptime in seconds."""
-    return int(time.time() - app_start_time)
-
-
-def update_provider_stats(provider: str, cost: float):
-    """Update statistics for a provider."""
-    if provider not in stats["requests_by_provider"]:
-        stats["requests_by_provider"][provider] = 0
-
-    stats["requests_by_provider"][provider] += 1
-    stats["total_cost_usd"] += cost
-
-
-# Import routes (must be after app creation)
+app.include_router(router)

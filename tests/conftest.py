@@ -77,9 +77,11 @@ async def async_client():
             response = await async_client.get("/health")
             assert response.status_code == 200
     """
+    from httpx import ASGITransport
+
     from src.api.main import app
 
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         yield client
 
 

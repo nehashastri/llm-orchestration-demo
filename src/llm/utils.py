@@ -32,8 +32,8 @@ def calculate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> fl
     except ValueError as e:
         raise ValueError(f"Unknown model: {model}") from e
 
-    prompt_cost = (prompt_tokens / 1_000_000) * config["cost_per_1m_prompt"]
-    completion_cost = (completion_tokens / 1_000_000) * config["cost_per_1m_completion"]
+    prompt_cost = (prompt_tokens / 1_000_000) * config["cost_per_1m_prompt_tokens"]
+    completion_cost = (completion_tokens / 1_000_000) * config["cost_per_1m_completion_tokens"]
     return prompt_cost + completion_cost
 
 

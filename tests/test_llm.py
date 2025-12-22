@@ -261,11 +261,11 @@ class TestStreamingOrchestration:
         from src.llm.orchestrator import streaming_orchestration
 
         mock_client = Mock()
-        mock_client.generate_stream = Mock(side_effect=Exception("Streaming failed"))
+        mock_client.generate_stream = Mock(side_effect=RuntimeError("Streaming failed"))
 
         with patch("src.llm.orchestrator.get_client", return_value=mock_client):
-            with pytest.raises(Exception):
-                async for token in streaming_orchestration(prompt="Test", provider="openai"):
+            with pytest.raises(RuntimeError, match="Streaming failed"):
+                async for _token in streaming_orchestration(prompt="Test", provider="openai"):
                     pass
 
 
@@ -370,7 +370,7 @@ class TestModelConfiguration:
 
         assert config["provider"] == "openai"
         assert "max_tokens" in config
-        assert "cost_per_1m_prompt" in config
+        assert "cost_per_1m_prompt_tokens" in config
         assert "timeout" in config
 
     def test_list_available_models(self):

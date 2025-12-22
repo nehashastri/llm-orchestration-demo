@@ -1,15 +1,14 @@
 """
 API route definitions for LLM orchestration endpoints.
 
-Implements all endpoints defined in docs/api_specs.md.
+Implements all endpoints defined in docs/api_specs.md using APIRouter.
 """
 
 import time
 
-from fastapi import Request, status
+from fastapi import APIRouter, Request, status
 from fastapi.responses import StreamingResponse
 
-from src.api.main import app, get_uptime_seconds, stats, update_provider_stats
 from src.api.models import (
     ChatRequest,
     ChatResponse,
@@ -26,6 +25,7 @@ from src.api.models import (
     StreamRequest,
     TokenUsage,
 )
+from src.api.state import get_uptime_seconds, stats, update_provider_stats
 from src.llm.clients import get_client
 from src.llm.orchestrator import (
     fallback_orchestration,
@@ -36,13 +36,16 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Use APIRouter to avoid circular imports
+router = APIRouter()
+
 
 # ============================================================================
 # Health Check
 # ============================================================================
 
 
-@app.get(
+@router.get(
     "/health",
     response_model=HealthResponse,
     tags=["Health"],
@@ -80,7 +83,7 @@ async def health_check():
 # ============================================================================
 
 
-@app.post(
+@router.post(
     "/chat",
     response_model=ChatResponse,
     status_code=status.HTTP_200_OK,
@@ -139,7 +142,7 @@ async def chat_completion(request_body: ChatRequest, request: Request):
 # ============================================================================
 
 
-@app.post(
+@router.post(
     "/chat/parallel",
     response_model=ParallelResponse,
     status_code=status.HTTP_501_NOT_IMPLEMENTED,
@@ -159,10 +162,6 @@ async def parallel_chat(request_body: ParallelRequest, request: Request):
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="Parallel orchestration is not available in OpenAI-only mode. Use /chat/fallback instead.",
     )
-        all_responses=all_responses,
-        errors=result.get("errors"),
-        metrics=result["metrics"],
-    )
 
 
 # ============================================================================
@@ -170,7 +169,7 @@ async def parallel_chat(request_body: ParallelRequest, request: Request):
 # ============================================================================
 
 
-@app.post(
+@router.post(
     "/chat/fallback",
     response_model=FallbackResponse,
     status_code=status.HTTP_200_OK,
@@ -232,7 +231,7 @@ async def fallback_chat(request_body: FallbackRequest, request: Request):
 # ============================================================================
 
 
-@app.post(
+@router.post(
     "/chat/stream",
     tags=["Chat"],
     summary="Streaming chat completion",
@@ -293,7 +292,7 @@ async def stream_chat(request_body: StreamRequest, request: Request):
 # ============================================================================
 
 
-@app.get(
+@router.get(
     "/models",
     response_model=ModelsResponse,
     tags=["Models"],
@@ -317,7 +316,7 @@ async def get_models():
 # ============================================================================
 
 
-@app.get(
+@router.get(
     "/stats",
     response_model=StatsResponse,
     tags=["Monitoring"],
@@ -353,7 +352,7 @@ async def get_stats():
 # ============================================================================
 
 
-@app.get(
+@router.get(
     "/",
     tags=["Root"],
     summary="API information",
