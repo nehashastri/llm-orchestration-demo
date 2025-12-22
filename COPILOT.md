@@ -36,6 +36,7 @@ pixi run dev        # Start server
 pixi run test       # Run tests
 pixi run lint       # Lint code
 pixi run format     # Format code
+pixi run test --cov=src --cov-report=term  # Run tests with coverage summary
 ```
 
 ### 3. Import Order (ALWAYS follow this)
@@ -73,10 +74,10 @@ async def test_llm_call(mock_openai_client):
     """Test successful LLM call."""
     # Arrange
     prompt = "Test prompt"
-    
+
     # Act
     result = await call_llm(prompt)
-    
+
     # Assert
     assert result is not None
     mock_openai_client.create.assert_called_once()
@@ -91,11 +92,11 @@ async def chat(
 ) -> ChatResponse:
     """
     Chat endpoint with LLM orchestration.
-    
+
     Args:
         request: Chat request with prompt
         client: OpenAI client (injected)
-        
+
     Returns:
         Chat response with content and metadata
     """

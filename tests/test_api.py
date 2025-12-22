@@ -44,6 +44,53 @@ class TestHealthEndpoint:
         assert "openai" in data["providers"]
 
 
+class TestMonitoringEndpoints:
+    """Tests for monitoring and ops endpoints."""
+
+    def test_detailed_health_structure(self, client):
+        """Ensure detailed health includes dependency checks and system metrics."""
+        response = client.get("/health/detailed")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["status"] in ["healthy", "degraded", "unhealthy"]
+        assert "checks" in data
+        assert "system" in data
+        assert "openai" in data["checks"]
+        assert "anthropic" in data["checks"]
+        assert "cpu_percent" in data["system"]
+        assert "memory_percent" in data["system"]
+
+    def test_readiness_endpoint(self, client):
+        """Readiness probe should respond with a status field."""
+        response = client.get("/health/ready")
+        assert response.status_code == 200
+        data = response.json()
+        assert "status" in data
+
+    def test_liveness_endpoint(self, client):
+        """Liveness probe should always return alive payload."""
+        response = client.get("/health/live")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "alive"
+
+    def test_metrics_endpoint_structure(self, client):
+        """Metrics endpoint should surface core system resource gauges."""
+        response = client.get("/metrics")
+        assert response.status_code == 200
+        data = response.json()
+
+        for field in [
+            "cpu_percent",
+            "memory_percent",
+            "memory_used_mb",
+            "memory_total_mb",
+            "disk_percent",
+        ]:
+            assert field in data
+
+
 # ============================================================================
 # Root Endpoint Tests
 # ============================================================================

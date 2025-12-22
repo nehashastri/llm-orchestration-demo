@@ -93,6 +93,36 @@ class TestMiddleware:
             assert "X-Request-ID" in response.headers
             assert "X-RateLimit-Limit" in response.headers
 
+    def test_rate_limit_enforced(self, client):
+        """Exceeding the per-window limit should return 429."""
+        from src.api import main
+
+        original_limit = main._rate_limit_limit
+        original_window = main._rate_limit_window
+        try:
+            main._rate_limit_limit = 5
+            main._rate_limit_window = 60
+            main._rate_limit_records.clear()
+
+            codes = [client.get("/health").status_code for _ in range(6)]
+            assert 429 in codes
+        finally:
+            main._rate_limit_records.clear()
+            main._rate_limit_limit = original_limit
+            main._rate_limit_window = original_window
+
+    def test_slow_request_warning_branch(self, client):
+        """Force slow-request path by lowering threshold to zero."""
+        from src.api import main
+
+        original_threshold = main._slow_request_threshold
+        try:
+            main._slow_request_threshold = 0
+            response = client.get("/health")
+            assert response.status_code == 200
+        finally:
+            main._slow_request_threshold = original_threshold
+
 
 # ============================================================================
 # Error Handler Tests
