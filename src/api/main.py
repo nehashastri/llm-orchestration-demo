@@ -33,6 +33,7 @@ from src.api.routes import router as api_router
 from src.api.state import stats
 from src.utils.config import settings
 from src.utils.logger import get_logger, log_api_request
+from src.utils.redis import close_redis, init_redis
 
 logger = get_logger(__name__)
 
@@ -53,8 +54,20 @@ async def lifespan(app: FastAPI):
     if not settings.openai_api_key:
         logger.warning("openai_api_key_not_set")
 
+    # Initialize Redis connection
+    try:
+        await init_redis()
+        logger.info("redis_initialized")
+    except Exception as e:
+        logger.error("redis_initialization_failed", error=str(e))
+        # Decide if you want to fail fast or continue without Redis
+        # For now, we'll continue (rate limiting will fail open)
+
     logger.info("application_ready")
     yield
+
+    # Shutdown: Close Redis connection
+    await close_redis()
     logger.info("application_shutting_down")
 
 

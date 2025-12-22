@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 10  # requests per minute
     rate_limit_window: int = 60  # seconds
 
+    # Redis Configuration
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
+
     # API Configuration
     api_title: str = "LLM Orchestration API"
     api_version: str = "0.1.0"

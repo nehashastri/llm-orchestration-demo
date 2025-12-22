@@ -129,7 +129,7 @@ async def test_performance_middleware_warn_branch(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_rate_limit_middleware_blocks_second_request():
-    middleware = RateLimitMiddleware(app=None, requests_per_hour=1)
+    middleware = RateLimitMiddleware(app=None, requests_per_window=1, window_seconds=3600)
     request = make_request("/chat")
 
     resp1 = await middleware.dispatch(request, lambda req: dummy_call_next(req, 200))

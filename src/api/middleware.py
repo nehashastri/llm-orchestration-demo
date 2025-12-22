@@ -10,6 +10,7 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.utils.logger import get_logger
+from src.utils.redis import check_rate_limit
 
 logger = get_logger(__name__)
 
@@ -117,78 +118,71 @@ class PerformanceMonitoringMiddleware(BaseHTTPMiddleware):
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Simple in-memory rate limiting.
-
-    NOTE: This is a basic implementation for learning.
-    For production, use Redis-based rate limiting (e.g., slowapi).
+    Redis-backed rate limiting middleware using sliding window algorithm.
 
     What it does:
-    - Tracks requests per IP address
-    - Limits to 100 requests per hour per IP
+    - Tracks requests per IP address using Redis
+    - Distributed rate limiting (works across multiple servers)
+    - Configurable limits and time windows
     - Returns 429 if limit exceeded
     """
 
-    def __init__(self, app, requests_per_hour: int = 100):
+    def __init__(self, app, requests_per_window: int = 100, window_seconds: int = 3600):
         super().__init__(app)
-        self.requests_per_hour = requests_per_hour
-        self.request_counts = {}  # {ip: [(timestamp, count), ...]}
-        self.window_size = 3600  # 1 hour in seconds
+        self.requests_per_window = requests_per_window
+        self.window_seconds = window_seconds
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
-        # Skip rate limiting for health checks
-        if request.url.path in ["/health", "/docs", "/openapi.json"]:
+        # Skip rate limiting for health checks and docs
+        if request.url.path in [
+            "/health",
+            "/health/ready",
+            "/health/live",
+            "/docs",
+            "/redoc",
+            "/openapi.json",
+        ]:
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "unknown"
-        current_time = time.time()
 
-        # Clean old entries
-        self._clean_old_entries(client_ip, current_time)
-
-        # Check rate limit
-        if self._is_rate_limited(client_ip, current_time):
-            logger.warning(
-                "Rate limit exceeded",
-                client_ip=client_ip,
-                path=request.url.path,
-                limit=self.requests_per_hour,
+        try:
+            # Check rate limit using Redis
+            is_allowed, remaining = await check_rate_limit(
+                client_id=client_ip, limit=self.requests_per_window, window=self.window_seconds
             )
 
-            return Response(
-                content='{"error": {"type": "rate_limit_exceeded", "message": "Too many requests. Please try again later."}}',
-                status_code=429,
-                media_type="application/json",
-            )
+            if not is_allowed:
+                logger.warning(
+                    "Rate limit exceeded",
+                    client_ip=client_ip,
+                    path=request.url.path,
+                    limit=self.requests_per_window,
+                    window_seconds=self.window_seconds,
+                )
 
-        # Record this request
-        self._record_request(client_ip, current_time)
+                return Response(
+                    content='{"error": {"type": "rate_limit_exceeded", "message": "Too many requests. Please try again later."}}',
+                    status_code=429,
+                    media_type="application/json",
+                    headers={
+                        "X-RateLimit-Limit": str(self.requests_per_window),
+                        "X-RateLimit-Remaining": str(remaining),
+                        "X-RateLimit-Reset": str(self.window_seconds),
+                    },
+                )
 
-        return await call_next(request)
+            # Add rate limit headers to successful responses
+            response = await call_next(request)
+            response.headers["X-RateLimit-Limit"] = str(self.requests_per_window)
+            response.headers["X-RateLimit-Remaining"] = str(remaining)
 
-    def _clean_old_entries(self, ip: str, current_time: float):
-        """Remove requests older than the time window"""
-        if ip not in self.request_counts:
-            return
+            return response
 
-        cutoff_time = current_time - self.window_size
-        self.request_counts[ip] = [
-            (ts, count) for ts, count in self.request_counts[ip] if ts > cutoff_time
-        ]
-
-    def _is_rate_limited(self, ip: str, current_time: float) -> bool:
-        """Check if IP has exceeded rate limit"""
-        if ip not in self.request_counts:
-            return False
-
-        total_requests = sum(count for _, count in self.request_counts[ip])
-        return total_requests >= self.requests_per_hour
-
-    def _record_request(self, ip: str, current_time: float):
-        """Record a request for this IP"""
-        if ip not in self.request_counts:
-            self.request_counts[ip] = []
-
-        self.request_counts[ip].append((current_time, 1))
+        except Exception as e:
+            # If Redis fails, log error and allow request (fail open)
+            logger.error("Rate limiting error, allowing request", client_ip=client_ip, error=str(e))
+            return await call_next(request)
 
 
 # ============================================

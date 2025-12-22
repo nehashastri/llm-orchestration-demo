@@ -30,7 +30,7 @@ class TestExceptionHandlers:
         )
         response = await main.validation_exception_handler(_request(), exc)
         assert response.status_code == 422
-        body = response.body.decode()
+        body = bytes(response.body).decode()
         assert "validation_error" in body
         assert "prompt" in body
 

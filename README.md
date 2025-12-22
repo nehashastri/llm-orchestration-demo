@@ -14,7 +14,7 @@ Production-ready FastAPI service for orchestrating OpenAI models with parallel e
 Prerequisites
 
 Python 3.11+
-Pixi (recommended) or pip
+Pixi
 OpenAI API key
 
 1. Clone the Repository
@@ -22,81 +22,38 @@ OpenAI API key
 git clone https://github.com/yourusername/llm-orchestration-demo.git
 cd llm-orchestration-demo
 ```
-2. Set Up Environment
-```bash
-# Copy example env file
-cp .env.example .env
 
-# Edit .env and add your API key
-OPENAI_API_KEY=sk-...
-```
-3. Install Dependencies (Pixi recommended)
+2. Install Dependencies
 ```bash
 pixi install
-# or
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -e .
 ```
+
+3. Configure Environment
+```bash
+cp .env.example .env
+# Edit .env and add your OpenAI API key
+```
+
 4. Run the Server
 ```bash
 pixi run dev
-# or
-uvicorn src.api.main:app --reload
 ```
-Server will start at: http://localhost:8000
+Server starts at: http://localhost:8000
 
-5. Test the API
+5. View Interactive Docs
 ```bash
-# Health check
-curl http://localhost:8000/health
-
-# Chat completion
-curl -X POST http://localhost:8000/chat \
-    -H "Content-Type: application/json" \
-    -d '{"prompt": "Hello, world!", "model": "gpt-4o"}'
+start http://localhost:8000/docs
 ```
 
-6. View Interactive Docs
-Open in your browser: http://localhost:8000/docs
+Project Overview
 
-🏗️ Project Structure
-llm-orchestration-demo/
-├── src/
-│   ├── api/                  # FastAPI application
-│   │   ├── main.py           # App wiring, middleware, handlers
-│   │   ├── routes.py         # Endpoint definitions
-│   │   ├── models.py         # Pydantic schemas
-│   │   ├── middleware.py     # Optional middleware utilities
-│   │   └── health.py         # Health/metrics helpers
-│   ├── llm/                  # LLM orchestration
-│   │   ├── clients.py        # OpenAI client wrapper
-│   │   └── orchestrator.py   # Parallel/fallback/streaming orchestration
-│   └── utils/                # Utilities
-│       ├── config.py         # Settings & environment
-│       └── logger.py         # Structured logging
-├── tests/                    # Pytest test suite
-│   ├── test_api.py          # API endpoint tests
-│   ├── test_llm.py          # LLM orchestration tests
-│   └── conftest.py          # Shared fixtures
-├── examples/                 # Working code examples
-│   ├── basic_call.py        # Simple chat example
-│   ├── fallback_patterns.py # Fallback usage patterns
-│   ├── parallel_calls.py    # Parallel orchestration
-│   ├── streaming.py         # Streaming responses
-│   └── test_client.py       # Minimal client usage
-├── docs/                     # Documentation
-│   ├── ARCHITECTURE.md      # System design
-│   └── api_specs.md         # API specifications
-├── .vscode/                  # VS Code configuration
-│   ├── settings.json        # Editor settings
-│   ├── tasks.json           # Build tasks
-│   └── keybindings.json     # Custom shortcuts
-├── pixi.toml                # Pixi dependencies
-├── pyproject.toml           # Python project config
-├── .env.example             # Environment template
-├── COPILOT.md               # AI assistant instructions
-└── README.md                # This file
+**Key Directories:**
+- `src/api/` — FastAPI application (routes, models, middleware)
+- `src/llm/` — LLM orchestration (clients, orchestrator strategies)
+- `src/utils/` — Configuration, logging, utilities
+- `tests/` — Pytest test suite
+- `examples/` — Working code examples (basic, parallel, streaming, fallback)
+- `docs/` — Architecture and API specifications
 
 🎯 Usage Examples
 Basic Chat
@@ -148,42 +105,21 @@ for event in client.events():
     print(event.data, end='', flush=True)
 
 🧪 Testing
-Run All Tests (Pixi)
 ```bash
-pixi run test
-```
-Run With Coverage (terminal summary)
-```bash
-pixi run test --cov=src --cov-report=term
-```
-Run Specific Tests
-```bash
-pytest tests/test_api.py -v
-pytest tests/test_llm.py -v
-```
-Watch Mode (Auto-rerun on file changes)
-```bash
-pixi run test-watch
+pixi run test                    # Run full suite
+pixi run test-cov                # With HTML coverage report
+pixi run -e dev pytest tests/test_api.py  # Single test file
 ```
 
 🔧 Development
-VS Code Shortcuts
-ShortcutActionCtrl+Shift+RStart development serverCtrl+Shift+TRun testsCtrl+Shift+FFormat & lint codeCtrl+Shift+DOpen API docs in browser
-Code Formatting
-bash# Format code
-pixi run format
+```bash
+pixi run format                  # Format code + markdown
+pixi run lint                    # Lint and auto-fix
+pixi run typecheck               # Type checking
+pixi run check                   # All checks: format, lint, typecheck
+```
 
-# Lint code
-pixi run lint
-
-# Type check
-pixi run type-check
-Adding Dependencies
-bash# Add a new package
-pixi add <package-name>
-
-# Add a development dependency
-pixi add --feature dev <package-name>
+For comprehensive development guidance, see [COPILOT.md](COPILOT.md) — covers patterns, testing strategy, error handling, and documentation standards.
 
 📊 Monitoring & Observability
 Structured Logging
@@ -241,10 +177,10 @@ Configure CORS allowed origins
 
 📚 Documentation
 
-Architecture: docs/ARCHITECTURE.md
-API Specs: docs/api_specs.md
-Interactive Docs: http://localhost:8000/docs (when running)
-Copilot Instructions: COPILOT.md
+- **Development Guide:** [COPILOT.md](COPILOT.md) — Patterns, code style, testing, how-to guides
+- **Architecture:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — System design and data flows
+- **API Specs:** [docs/api_specs.md](docs/api_specs.md) — Endpoint reference
+- **Interactive Docs:** http://localhost:8000/docs (when running)
 
 
 🤝 Contributing
