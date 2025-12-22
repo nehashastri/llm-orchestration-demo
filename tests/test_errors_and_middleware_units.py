@@ -68,7 +68,7 @@ async def test_validation_exception_handler_lists_fields():
     request = make_request()
     exc = RequestValidationError([{"loc": ("body", "field"), "msg": "bad", "type": "value_error"}])
     resp = await errors.validation_exception_handler(request, exc)
-    assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert resp.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     assert b"validation_error" in resp.body
     assert b"field" in resp.body
 
@@ -99,7 +99,7 @@ async def test_generic_exception_handler_sanitizes_message():
 
 @pytest.mark.asyncio
 async def test_request_logging_middleware_happy_path():
-    middleware = RequestLoggingMiddleware(app=None)
+    middleware = RequestLoggingMiddleware(app=FastAPI())
     request = make_request("/hello")
     resp = await middleware.dispatch(request, lambda req: dummy_call_next(req, 201))
     assert resp.status_code == 201
@@ -108,7 +108,7 @@ async def test_request_logging_middleware_happy_path():
 
 @pytest.mark.asyncio
 async def test_request_logging_middleware_error_path():
-    middleware = RequestLoggingMiddleware(app=None)
+    middleware = RequestLoggingMiddleware(app=FastAPI())
     request = make_request("/err")
 
     async def raise_next(_request: Request):
@@ -120,7 +120,7 @@ async def test_request_logging_middleware_error_path():
 
 @pytest.mark.asyncio
 async def test_performance_middleware_warn_branch(monkeypatch):
-    middleware = PerformanceMonitoringMiddleware(app=None)
+    middleware = PerformanceMonitoringMiddleware(app=FastAPI())
     monkeypatch.setattr(PerformanceMonitoringMiddleware, "SLOW_REQUEST_THRESHOLD", 0)
     request = make_request("/slow")
     resp = await middleware.dispatch(request, lambda req: dummy_call_next(req, 200))
@@ -193,13 +193,6 @@ async def test_streaming_orchestration_error_branch(monkeypatch):
 async def test_check_openai_unhealthy_when_missing_env(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     result = await health._check_openai()
-    assert result["status"] == "unhealthy"
-
-
-@pytest.mark.asyncio
-async def test_check_anthropic_unhealthy_when_missing_env(monkeypatch):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    result = await health._check_anthropic()
     assert result["status"] == "unhealthy"
 
 
@@ -278,14 +271,11 @@ def test_log_api_request_helper():
 @pytest.mark.asyncio
 async def test_health_checks_when_keys_present(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
 
     openai_status = await health._check_openai()
-    anthropic_status = await health._check_anthropic()
     readiness = await health._check_if_ready()
 
     assert openai_status["status"] == "healthy"
-    assert anthropic_status["status"] == "healthy"
     assert readiness is True
 
 
@@ -371,6 +361,7 @@ def test_logging_date_namer_formats(tmp_path, monkeypatch):
         h for h in logging.getLogger().handlers if isinstance(h, TimedRotatingFileHandler)
     )
 
+    assert handler.namer is not None
     formatted_with_log = handler.namer(str(tmp_path / "app.log.2025-01-01"))
     formatted_plain = handler.namer(str(tmp_path / "app.2025-01-01"))
 

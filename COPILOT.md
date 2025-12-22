@@ -2,6 +2,7 @@
 
 ## Project Context
 FastAPI app for LLM orchestration. Interview demo for AI/ML Engineer role.
+Scope: **OpenAI-only** (4o / 4o-mini / 4-turbo / 3.5).
 Focus: **Speed, async patterns, production-ready code**.
 
 ## Critical Rules
@@ -133,7 +134,8 @@ When implementing features, CHECK THESE FIRST:
 
 ## Common Tasks
 
-### Add New LLM Provider
+### Future: Add New Provider (not enabled now)
+OpenAI-only today. If expanding:
 1. Create `src/llm/providers/new_provider.py`
 2. Inherit from `BaseLLMProvider`
 3. Implement `async def generate()`
@@ -143,7 +145,7 @@ When implementing features, CHECK THESE FIRST:
 1. Add route in `src/api/routes.py`
 2. Add Pydantic models in `src/api/models.py`
 3. Add tests in `tests/test_api.py`
-4. Update docs in `docs/ARCHITECTURE.md`
+4. Update docs in `ARCHITECTURE.md` and `docs/api_specs.md`
 
 ### Debug Issues
 1. Check logs: `pixi run dev` (in terminal)

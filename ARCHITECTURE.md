@@ -1,250 +1,134 @@
 System Architecture
 
 Overview
-FastAPI-based LLM orchestration service that provides intelligent routing, parallel execution, and fallback strategies across multiple LLM providers (OpenAI, Anthropic). Built for low-latency, cost-efficient AI interactions with production-grade monitoring.
-Design Principles
+FastAPI-based LLM orchestration service focused on OpenAI models. Provides single-call chat, parallel fan-out, fallback between model sizes, and streaming responses with structured logging.
 
-Async-First: All I/O operations use asyncio for maximum throughput
-Provider-Agnostic: Unified interface across OpenAI, Anthropic, and future providers
-Observable: Structured logging for latency, cost, and error tracking
-Resilient: Timeouts, retries, and graceful degradation
-Testable: Dependency injection and mocked external calls
+Design Principles
+- Async-first: asyncio and async HTTP clients for throughput
+- Focused scope: OpenAI-only models (4o / 4o-mini / 4-turbo / 3.5)
+- Observability: structured logging and lightweight in-memory stats
+- Resilience: timeouts, simple fallbacks, default message on total failure
+- Testable: dependency injection for clients and orchestrators
 
 System Components
 1. API Layer (src/api/)
 Responsibility: HTTP interface and request/response handling
-
-main.py: FastAPI application factory, middleware registration, exception handlers
-routes.py: Endpoint definitions (/chat, /stream, /health)
-models.py: Pydantic schemas for request validation and response serialization
-middleware.py: Logging, rate limiting, CORS, request ID injection
-
-Key Features:
-
-OpenAPI/Swagger auto-generated docs at /docs
-Request validation with Pydantic (type safety + auto-docs)
-Structured error responses with proper HTTP status codes
+- main.py: FastAPI app setup, middleware hooks, exception handlers
+- routes.py: Endpoints (/chat, /chat/parallel, /chat/fallback, /chat/stream, /models, /stats, /health)
+- models.py: Pydantic schemas for requests and responses
+- middleware.py: Request ID, CORS, logging/rate-limit helpers (not all wired by default)
+- state.py: In-memory counters for basic metrics
 
 2. LLM Layer (src/llm/)
-Responsibility: Provider-specific API clients and response normalization
+Responsibility: Provider client and orchestration strategies
+- clients.py: OpenAI client wrapper plus factory get_client("openai")
+- orchestrator.py: High-level strategies
+      - parallel_orchestration(): race multiple OpenAI models and return fastest success
+      - fallback_orchestration(): try primary model then progressively smaller models
+      - streaming_orchestration(): async token generator for SSE streaming
+- models.py: Normalized request/response dataclasses
 
-clients.py:
-
-OpenAIClient: Wraps OpenAI SDK, handles chat completions and streaming
-AnthropicClient: Wraps Anthropic SDK, normalizes message format
-BaseLLMClient: Abstract interface for future providers
-
-
-orchestrator.py: High-level orchestration strategies
-
-parallel_call(): Executes multiple providers simultaneously, returns fastest
-fallback_call(): Primary → Secondary → Tertiary provider chain
-streaming_call(): Token-by-token streaming via Server-Sent Events
-consensus_call(): Polls multiple models, returns majority vote
-
-
-models.py: Provider-agnostic data models
-
-LLMRequest: Normalized request format
-LLMResponse: Normalized response with metadata (latency, tokens, cost)
-
-
-
-3. Utilities Layer (src/utils/)
+3. Utilities (src/utils/)
 Responsibility: Cross-cutting concerns
+- config.py: Pydantic settings (API keys, defaults, timeouts, logging levels)
+- logger.py: structlog-based JSON logging with request correlation IDs
 
-config.py: Environment-based settings using pydantic-settings
-
-API keys (from .env)
-Model configurations (temperature, max_tokens, timeouts)
-Feature flags (enable_caching, enable_streaming)
-
-
-logger.py: Structured logging with structlog
-
-JSON-formatted logs for production parsing
-Request correlation IDs
-Automatic latency and cost tracking
-
-
-cache.py: In-memory LRU cache for repeated prompts
-
-TTL-based expiration
-Cost savings tracking
-
-
-
-Data Flow
-Standard Chat Request
+Data Flows
+Standard Chat
 ┌──────┐      ┌─────────┐      ┌──────────────┐      ┌──────────┐
-│Client│─────▶│FastAPI  │─────▶│Orchestrator  │─────▶│LLM Client│
-│      │      │(routes) │      │(strategy)    │      │(OpenAI)  │
+│Client│ ───▶ │FastAPI  │ ───▶ │Orchestrator  │ ───▶ │OpenAI    │
 └──────┘      └─────────┘      └──────────────┘      └──────────┘
-   ▲                │                  │                    │
-   │                │                  │                    │
-   │                ▼                  ▼                    ▼
-   │          ┌─────────┐      ┌──────────────┐      ┌──────────┐
-   └──────────│Response │◀─────│Aggregate     │◀─────│Response  │
-              │Model    │      │Results       │      │Data      │
-              └─────────┘      └──────────────┘      └──────────┘
-Parallel Orchestration
+      ▲               │                │                    │
+      │               ▼                ▼                    ▼
+      │         ┌─────────┐      ┌──────────────┐      ┌──────────┐
+      └────────▶│Response │ ◀─── │Aggregate     │ ◀─── │Result    │
+                │Model    │      │Metrics/Usage │      │Data      │
+                └─────────┘      └──────────────┘      └──────────┘
+
+Parallel Orchestration (OpenAI models)
                     ┌─────────────┐
-            ┌──────▶│OpenAI Client│─────┐
+            ┌──────▶│OpenAI 4o    │─────┐
             │       └─────────────┘     │
-┌───────────┴──┐                        ├──▶ asyncio.gather()
+┌───────────┴──┐                        ├──▶ asyncio.as_completed()
 │Orchestrator  │                        │
 └───────────┬──┘                        │
-            │       ┌──────────────────┐│
-            └──────▶│Anthropic Client  ││
-                    └──────────────────┘│
+            │       ┌─────────────┐     │
+            └──────▶│OpenAI 4o-mini│    │
+                    └─────────────┘     │
                                         ▼
                                   ┌──────────┐
                                   │Return    │
                                   │Fastest   │
                                   └──────────┘
+
 Streaming Response
-Client ◀─── SSE Stream ◀─── FastAPI ◀─── async for chunk ◀─── LLM API
-  │                           │                                  │
-  │ data: {"token": "Hello"}  │       yield {"token": "Hello"}  │
-  │ data: {"token": " "}      │       yield {"token": " "}      │
-  │ data: {"token": "world"}  │       yield {"token": "world"}  │
-  │ data: [DONE]              │       return                    │
-Key Patterns
-1. Dependency Injection
-python# Allows easy mocking in tests
-@app.post("/chat")
-async def chat(
-    request: ChatRequest,
-    orchestrator: Orchestrator = Depends(get_orchestrator)
-):
-    return await orchestrator.execute(request)
-2. Circuit Breaker (Future Enhancement)
-python# Track failures, open circuit after threshold
-if failure_rate > 0.5:
-    skip_provider("openai", duration=60)  # 60-second cooldown
-3. Cost Tracking
-python# Automatic cost calculation per request
-cost = (prompt_tokens / 1M * $0.03) + (completion_tokens / 1M * $0.06)
-logger.info("llm_call", model="gpt-4", cost=cost, latency=1.23)
-Technology Stack
-LayerTechnologyJustificationAPIFastAPIAsync-native, auto-docs, modern PythonLLM SDKsOpenAI SDK, Anthropic SDKOfficial clients, streaming supportValidationPydanticType safety, auto-validation, serializationAsyncasyncioNon-blocking I/O for parallel LLM callsLoggingstructlogStructured JSON logs for productionTestingpytest, pytest-asyncioIndustry standard, async supportEnv ManagementPixiReproducible environments, fast installs
+Client ◀─── SSE Stream ◀─── FastAPI ◀─── async for token ◀─── OpenAI
+
 Configuration
-Environment Variables (.env)
-bash# API Keys
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
+Required environment variables (.env)
+- OPENAI_API_KEY=sk-...
 
-# Model Defaults
-DEFAULT_MODEL=gpt-4-turbo
-DEFAULT_TEMPERATURE=0.7
-DEFAULT_MAX_TOKENS=500
+Optional
+- DEFAULT_MODEL=gpt-4o
+- DEFAULT_TEMPERATURE=0.7
+- DEFAULT_MAX_TOKENS=500
+- DEFAULT_TIMEOUT=30
+- ENVIRONMENT=development|production|testing
+- LOG_LEVEL=INFO
+- RATE_LIMIT_REQUESTS=10
+- RATE_LIMIT_WINDOW=60
 
-# Infrastructure
-ENVIRONMENT=development
-LOG_LEVEL=INFO
-ENABLE_CACHING=true
-CACHE_TTL_SECONDS=3600
 Model Configuration (config.py)
-pythonMODELS = {
-    "gpt-4-turbo": {
-        "provider": "openai",
-        "cost_per_1m_prompt": 0.03,
-        "cost_per_1m_completion": 0.06,
-        "timeout": 30
-    },
-    "claude-3-opus": {
-        "provider": "anthropic",
-        "cost_per_1m_prompt": 0.015,
-        "cost_per_1m_completion": 0.075,
-        "timeout": 30
-    }
-}
-Error Handling Strategy
-Error Types
+- gpt-4o: max_tokens 128000, streaming supported
+- gpt-4o-mini: max_tokens 128000, streaming supported
+- gpt-4-turbo: max_tokens 128000, streaming supported
+- gpt-3.5-turbo: max_tokens 4096, streaming supported
 
-Validation Errors (400): Invalid request format
-Authentication Errors (401): Missing/invalid API keys
-Rate Limit Errors (429): Provider quota exceeded
-Timeout Errors (504): LLM took too long
-Provider Errors (502): Upstream API failure
-Server Errors (500): Unexpected exceptions
+Caching and consensus orchestration are not implemented; cache flags are present in settings but unused.
+
+Error Handling Strategy
+- Validation (400): malformed payloads
+- Auth (401): missing or invalid credentials to provider
+- Rate limit (429): provider quota exceeded
+- Timeout (504): model did not respond in time
+- Provider (502): upstream API failure
+- Server (500): unexpected exceptions
 
 Retry Logic
-python@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type(RateLimitError)
-)
-async def call_llm(prompt: str):
-    ...
-Security Considerations
-
-API Keys: Never logged, stored only in .env (gitignored)
-Input Validation: Pydantic prevents injection attacks
-Rate Limiting: Prevents abuse (10 requests/minute per IP)
-CORS: Configurable allowed origins
-Request Size Limits: Max 10KB request body
+- Not enabled; future enhancement to add bounded retries for transient provider errors.
 
 Performance Targets
-MetricTargetMeasurementP50 Latency< 2sTime to first tokenP99 Latency< 10sEnd-to-end responseThroughput100 req/secWith parallel orchestrationCache Hit Rate> 30%For repeated promptsError Rate< 1%Non-timeout errors
+Metric | Target | Notes
+P50 latency | < 2s | time to first token
+P99 latency | < 10s | end-to-end response
+Throughput | O(100) rps | under parallel fan-out
+Error rate | < 1% | excluding timeouts
+
 Future Enhancements
 Phase 1 (Current)
-
-✅ Basic chat endpoint
-✅ OpenAI + Anthropic support
-✅ Structured logging
-✅ Health checks
+- ✅ Basic chat endpoint
+- ✅ OpenAI support (4o/4o-mini/4-turbo/3.5)
+- ✅ Parallel and fallback orchestration
+- ✅ SSE streaming
+- ✅ Structured logging and health checks
 
 Phase 2 (Next)
-
- Streaming responses
- Parallel orchestration
- Response caching
- Cost tracking dashboard
+- Streaming polish and backpressure handling
+- Parallel tuning and circuit-breaking
+- Cost tracking dashboard
+- Retry policies with jitter
 
 Phase 3 (Future)
-
- Circuit breaker pattern
- A/B testing framework
- Prompt template library
- WebSocket support
- Additional providers (Cohere, AI21)
+- WebSocket streaming
+- Prompt template library
+- A/B testing framework
+- Additional providers (Cohere, Anthropic, etc.)
 
 Observability
-Metrics to Track
+- Metrics: total requests, requests by provider, avg latency, error rate, total cost
+- Logging: JSON logs with request_id and timing details
 
-Latency: P50, P95, P99 by provider/model
-Cost: $ per request, daily spend
-Errors: Rate by type (timeout, auth, provider)
-Cache: Hit rate, memory usage
-
-Log Format (JSON)
-json{
-  "timestamp": "2024-01-15T10:30:45Z",
-  "level": "info",
-  "event": "llm_call",
-  "request_id": "req_abc123",
-  "model": "gpt-4-turbo",
-  "latency_ms": 1234,
-  "cost_usd": 0.0045,
-  "prompt_tokens": 150,
-  "completion_tokens": 300
-}
 Testing Strategy
-Unit Tests
-
-Mock external LLM calls
-Test request validation
-Test error handling
-
-Integration Tests
-
-Real API calls (small prompts)
-End-to-end flow validation
-Rate limit testing
-
-Load Tests
-
-Simulate 100 concurrent requests
-Measure latency under load
-Identify bottlenecks
+- Unit tests: mock OpenAI client, validate orchestration branching and error paths
+- Integration tests: exercise FastAPI endpoints with test client
+- Coverage: run pixi run test to validate before deploy

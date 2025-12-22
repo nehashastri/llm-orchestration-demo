@@ -57,7 +57,6 @@ class TestMonitoringEndpoints:
         assert "checks" in data
         assert "system" in data
         assert "openai" in data["checks"]
-        assert "anthropic" in data["checks"]
         assert "cpu_percent" in data["system"]
         assert "memory_percent" in data["system"]
 

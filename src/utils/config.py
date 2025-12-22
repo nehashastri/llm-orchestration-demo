@@ -9,13 +9,12 @@ Environment variables required:
 
 
 Optional environment variables:
-- ENVIRONMENT: development/production (default: development)
+- ENVIRONMENT: development/production/testing (default: development)
 - LOG_LEVEL: DEBUG/INFO/WARNING/ERROR (default: INFO)
-- DEFAULT_MODEL: Default LLM model (default: gpt-4-turbo)
+- DEFAULT_MODEL: Default LLM model (default: gpt-4o)
 - DEFAULT_TEMPERATURE: Default temperature (default: 0.7)
 - DEFAULT_MAX_TOKENS: Default max tokens (default: 500)
-- ENABLE_CACHING: Enable response caching (default: true)
-- CACHE_TTL_SECONDS: Cache TTL in seconds (default: 3600)
+- DEFAULT_TIMEOUT: Request timeout seconds (default: 30)
 """
 
 from typing import Literal
@@ -46,10 +45,6 @@ class Settings(BaseSettings):
     default_temperature: float = 0.7
     default_max_tokens: int = 500
     default_timeout: int = 30  # seconds
-
-    # Caching
-    enable_caching: bool = True
-    cache_ttl_seconds: int = 3600  # 1 hour
 
     # Rate Limiting
     rate_limit_requests: int = 10  # requests per minute
@@ -100,23 +95,6 @@ MODEL_CONFIGS = {
         "max_tokens": 4096,
         "cost_per_1m_prompt_tokens": 0.001,
         "cost_per_1m_completion_tokens": 0.002,
-        "supports_streaming": True,
-        "timeout": 30,
-    },
-    # Anthropic Claude models for testing and configuration
-    "claude-3-opus": {
-        "provider": "anthropic",
-        "max_tokens": 200000,
-        "cost_per_1m_prompt_tokens": 15.0,
-        "cost_per_1m_completion_tokens": 75.0,
-        "supports_streaming": True,
-        "timeout": 30,
-    },
-    "claude-3-haiku": {
-        "provider": "anthropic",
-        "max_tokens": 200000,
-        "cost_per_1m_prompt_tokens": 0.25,
-        "cost_per_1m_completion_tokens": 1.25,
         "supports_streaming": True,
         "timeout": 30,
     },

@@ -7,7 +7,7 @@ Covers edge cases, error paths, and rarely-executed code paths:
 - Health check error scenarios
 - Streaming error handling
 - System prompt handling
-- Anthropic normalization
+- OpenAI normalization
 - Logger utilities
 - Config utilities
 
@@ -296,33 +296,12 @@ class TestOrchestrationEdgeCases:
 class TestUtilityFunctions:
     """Tests for utility functions in utils modules."""
 
-    def test_normalize_anthropic_response(self):
-        """Test normalization of Anthropic API responses."""
-        from src.llm.utils import normalize_response
-
-        anthropic_response = {
-            "content": [{"text": "Response from Claude"}],
-            "usage": {
-                "input_tokens": 15,
-                "output_tokens": 25,
-            },
-            "model": "claude-3-opus",
-        }
-
-        normalized = normalize_response(anthropic_response, "anthropic")
-
-        assert normalized["content"] == "Response from Claude"
-        assert normalized["usage"]["prompt_tokens"] == 15
-        assert normalized["usage"]["completion_tokens"] == 25
-        assert normalized["usage"]["total_tokens"] == 40
-        assert normalized["model"] == "claude-3-opus"
-
     def test_normalize_unknown_provider_raises_error(self):
         """Test that normalize_response raises error for unknown providers."""
         from src.llm.utils import normalize_response
 
         with pytest.raises(ValueError) as exc_info:
-            normalize_response("unknown-provider", {})
+            normalize_response({}, "unknown-provider")
 
         assert "Unknown provider" in str(exc_info.value)
 

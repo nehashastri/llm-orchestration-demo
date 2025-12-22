@@ -112,13 +112,7 @@ async def detailed_health_check() -> DetailedHealthStatus:
     if openai_status["status"] != "healthy":
         overall_status = "degraded"
 
-    # Check 2: Anthropic API
-    anthropic_status = await _check_anthropic()
-    checks["anthropic"] = anthropic_status
-    if anthropic_status["status"] != "healthy":
-        overall_status = "degraded"
-
-    # Check 3: System resources
+    # Check 2: System resources
     system_status = _check_system_resources()
     checks["system"] = system_status
     if system_status["status"] != "healthy":
@@ -265,24 +259,6 @@ async def _check_openai() -> dict[str, Any]:
     except Exception as e:
         logger.error("OpenAI health check failed", error=str(e))
         return {"status": "unhealthy", "message": f"OpenAI API error: {str(e)}", "latency_ms": 0}
-
-
-async def _check_anthropic() -> dict[str, Any]:
-    """Check if Anthropic API is accessible"""
-    try:
-        import os
-
-        if not os.getenv("ANTHROPIC_API_KEY"):
-            return {
-                "status": "unhealthy",
-                "message": "Anthropic API key not configured",
-                "latency_ms": 0,
-            }
-
-        return {"status": "healthy", "message": "Anthropic API accessible", "latency_ms": 0}
-    except Exception as e:
-        logger.error("Anthropic health check failed", error=str(e))
-        return {"status": "unhealthy", "message": f"Anthropic API error: {str(e)}", "latency_ms": 0}
 
 
 def _check_system_resources() -> dict[str, Any]:

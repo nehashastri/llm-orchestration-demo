@@ -70,7 +70,7 @@ def normalize_response(raw_response: dict[str, Any], provider: str) -> dict[str,
 
     Args:
         raw_response: Raw response from the LLM provider
-        provider: Provider name ('openai', 'anthropic', etc.)
+        provider: Provider name (OpenAI-only)
 
     Returns:
         Normalized response dictionary with:
@@ -78,30 +78,18 @@ def normalize_response(raw_response: dict[str, Any], provider: str) -> dict[str,
             - usage: Token usage statistics
             - model: Model identifier (if available)
     """
-    if provider == "openai":
-        return {
-            "content": raw_response["choices"][0]["message"]["content"],
-            "usage": {
-                "prompt_tokens": raw_response["usage"]["prompt_tokens"],
-                "completion_tokens": raw_response["usage"]["completion_tokens"],
-                "total_tokens": raw_response["usage"].get(
-                    "total_tokens",
-                    raw_response["usage"]["prompt_tokens"]
-                    + raw_response["usage"]["completion_tokens"],
-                ),
-            },
-            "model": raw_response.get("model"),
-        }
-    elif provider == "anthropic":
-        return {
-            "content": raw_response["content"][0]["text"],
-            "usage": {
-                "prompt_tokens": raw_response["usage"]["input_tokens"],
-                "completion_tokens": raw_response["usage"]["output_tokens"],
-                "total_tokens": raw_response["usage"]["input_tokens"]
-                + raw_response["usage"]["output_tokens"],
-            },
-            "model": raw_response.get("model"),
-        }
-    else:
+    if provider != "openai":
         raise ValueError(f"Unknown provider: {provider}")
+
+    return {
+        "content": raw_response["choices"][0]["message"]["content"],
+        "usage": {
+            "prompt_tokens": raw_response["usage"]["prompt_tokens"],
+            "completion_tokens": raw_response["usage"]["completion_tokens"],
+            "total_tokens": raw_response["usage"].get(
+                "total_tokens",
+                raw_response["usage"]["prompt_tokens"] + raw_response["usage"]["completion_tokens"],
+            ),
+        },
+        "model": raw_response.get("model"),
+    }

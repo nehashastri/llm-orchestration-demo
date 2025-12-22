@@ -28,7 +28,7 @@ class ChatRequest(BaseModel):
     """
 
     prompt: str = Field(..., min_length=1, max_length=10000, description="User prompt or question")
-    model: str = Field(default="gpt-4-turbo", description="LLM model identifier")
+    model: str = Field(default="gpt-4o", description="LLM model identifier")
     temperature: float = Field(
         default=0.7, ge=0.0, le=2.0, description="Sampling temperature (0.0-2.0)"
     )
@@ -64,7 +64,7 @@ class ParallelRequest(BaseModel):
     providers: list[str] = Field(
         default=["openai"],
         min_length=1,
-        description="Providers to call in parallel (e.g., 'openai', 'anthropic')",
+        description="Providers to call in parallel (OpenAI-only in this build)",
     )
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: int = Field(default=500, ge=1, le=4000, description="Maximum tokens")
@@ -72,7 +72,7 @@ class ParallelRequest(BaseModel):
 
     @field_validator("providers")
     def _validate_providers(cls, v: list[str]) -> list[str]:
-        allowed = {"openai", "anthropic"}
+        allowed = {"openai"}
         invalid = [p for p in v if p not in allowed]
         if invalid:
             # Match tests expecting this message substring
@@ -224,7 +224,7 @@ class FallbackResponse(BaseModel):
     Example:
         {
             "content": "Response text",
-            "provider_used": "anthropic",
+            "provider_used": "openai",
             "primary_success": false,
             "fallback_triggered": true,
             "primary_error": "Timeout"

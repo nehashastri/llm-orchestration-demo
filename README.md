@@ -1,10 +1,10 @@
-Production-ready FastAPI service for orchestrating multiple LLM providers with intelligent routing, parallel execution, and fallback strategies.
+Production-ready FastAPI service for orchestrating OpenAI models with parallel execution and fallback strategies.
 
 ✨ Features
 
-🔄 OpenAI Integration: GPT-4 and GPT-3.5 Turbo models
+🔄 OpenAI Integration: GPT-4o/4o-mini/3.5-turbo models
 ⚡ Async-First Architecture: Non-blocking I/O for maximum throughput
-🎯 Intelligent Fallback: Automatic fallback to cheaper models with default message safety net
+🎯 Intelligent Fallback: Automatic fallback within the OpenAI model family with default message safety net
 📊 Built-in Observability: Structured logging, cost tracking, latency monitoring
 🛡️ Production-Ready: Error handling, rate limiting, request validation
 📚 Auto-Generated Docs: Interactive Swagger UI at /docs
@@ -18,36 +18,45 @@ Pixi (recommended) or pip
 OpenAI API key
 
 1. Clone the Repository
-bashgit clone https://github.com/yourusername/llm-orchestration-demo.git
+```bash
+git clone https://github.com/yourusername/llm-orchestration-demo.git
 cd llm-orchestration-demo
+```
 2. Set Up Environment
-bash# Copy example env file
+```bash
+# Copy example env file
 cp .env.example .env
 
 # Edit .env and add your API key
 OPENAI_API_KEY=sk-...
-3. Install Dependencies
-Option A: Using Pixi (Recommended)
-bashpixi install
-Option B: Using pip
-bashpython -m venv .venv
+```
+3. Install Dependencies (Pixi recommended)
+```bash
+pixi install
+# or
+python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e .
+```
 4. Run the Server
-bash# Using Pixi
+```bash
 pixi run dev
-
-# Using uvicorn directly
+# or
 uvicorn src.api.main:app --reload
+```
 Server will start at: http://localhost:8000
+
 5. Test the API
-bash# Health check
+```bash
+# Health check
 curl http://localhost:8000/health
 
 # Chat completion
 curl -X POST http://localhost:8000/chat \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello, world!", "model": "gpt-4-turbo"}'
+    -H "Content-Type: application/json" \
+    -d '{"prompt": "Hello, world!", "model": "gpt-4o"}'
+```
+
 6. View Interactive Docs
 Open in your browser: http://localhost:8000/docs
 
@@ -55,26 +64,27 @@ Open in your browser: http://localhost:8000/docs
 llm-orchestration-demo/
 ├── src/
 │   ├── api/                  # FastAPI application
-│   │   ├── main.py          # App factory, middleware
-│   │   ├── routes.py        # Endpoint definitions
-│   │   ├── models.py        # Pydantic schemas
-│   │   └── middleware.py    # Logging, rate limiting
+│   │   ├── main.py           # App wiring, middleware, handlers
+│   │   ├── routes.py         # Endpoint definitions
+│   │   ├── models.py         # Pydantic schemas
+│   │   ├── middleware.py     # Optional middleware utilities
+│   │   └── health.py         # Health/metrics helpers
 │   ├── llm/                  # LLM orchestration
-│   │   ├── clients.py       # Provider-specific clients
-│   │   ├── orchestrator.py  # Orchestration strategies
-│   │   └── models.py        # LLM request/response models
+│   │   ├── clients.py        # OpenAI client wrapper
+│   │   └── orchestrator.py   # Parallel/fallback/streaming orchestration
 │   └── utils/                # Utilities
-│       ├── config.py        # Settings & environment
-│       ├── logger.py        # Structured logging
-│       └── cache.py         # Response caching
+│       ├── config.py         # Settings & environment
+│       └── logger.py         # Structured logging
 ├── tests/                    # Pytest test suite
 │   ├── test_api.py          # API endpoint tests
 │   ├── test_llm.py          # LLM orchestration tests
 │   └── conftest.py          # Shared fixtures
 ├── examples/                 # Working code examples
-│   ├── basic_chat.py        # Simple chat example
+│   ├── basic_call.py        # Simple chat example
+│   ├── fallback_patterns.py # Fallback usage patterns
 │   ├── parallel_calls.py    # Parallel orchestration
-│   └── streaming.py         # Streaming responses
+│   ├── streaming.py         # Streaming responses
+│   └── test_client.py       # Minimal client usage
 ├── docs/                     # Documentation
 │   ├── ARCHITECTURE.md      # System design
 │   └── api_specs.md         # API specifications
@@ -103,9 +113,8 @@ response = requests.post(
 )
 
 print(response.json()["content"])
-## Parallel Testing (Disabled)
-**Note**: Parallel orchestration endpoint has been disabled in OpenAI-only mode.
-Use fallback orchestration for reliability instead.
+## Parallel Orchestration
+Runs multiple OpenAI models in parallel (e.g., gpt-4o vs gpt-4o-mini) and returns the fastest success.
 Fallback Strategy
 python# Automatic fallback: gpt-4-turbo → gpt-3.5-turbo → default message
 response = requests.post(
@@ -139,23 +148,23 @@ for event in client.events():
     print(event.data, end='', flush=True)
 
 🧪 Testing
-Run All Tests
-bash# Using Pixi
+Run All Tests (Pixi)
+```bash
 pixi run test
-
-# Using pytest directly
-pytest tests/ -v
+```
+Run With Coverage (terminal summary)
+```bash
+pixi run test --cov=src --cov-report=term
+```
 Run Specific Tests
-bash# Test API endpoints only
+```bash
 pytest tests/test_api.py -v
-
-# Test LLM orchestration only
 pytest tests/test_llm.py -v
-
-# Run with coverage
-pytest tests/ --cov=src --cov-report=html
+```
 Watch Mode (Auto-rerun on file changes)
-bashpixi run test-watch
+```bash
+pixi run test-watch
+```
 
 🔧 Development
 VS Code Shortcuts
@@ -200,10 +209,8 @@ bashcurl http://localhost:8000/stats
 Returns:
 
 Total requests
-Requests by provider
 Average latency
-Total cost
-Cache hit rate
+Total cost (OpenAI only)
 Error rate
 
 
@@ -216,22 +223,20 @@ ANTHROPIC_API_KEY=sk-ant-...
 # Optional (with defaults)
 ENVIRONMENT=production
 LOG_LEVEL=INFO
-DEFAULT_MODEL=gpt-4-turbo
+DEFAULT_MODEL=gpt-4o
 DEFAULT_TEMPERATURE=0.7
-ENABLE_CACHING=true
-CACHE_TTL_SECONDS=3600
 Docker (Coming Soon)
 bashdocker build -t llm-orchestration .
 Production Checklist
 
  Set ENVIRONMENT=production in .env
  Configure API key rotation
- Set up monitoring (Prometheus, Grafana)
- Enable HTTPS
- Configure rate limiting per user/API key
- Set up log aggregation (ELK, Datadog)
- Add authentication/authorization
- Configure CORS allowed origins
+Set up monitoring (Prometheus, Grafana)
+Enable HTTPS
+Configure rate limiting per user/API key
+Set up log aggregation (ELK, Datadog)
+Add authentication/authorization
+Configure CORS allowed origins
 
 
 📚 Documentation
@@ -267,4 +272,3 @@ This project is licensed under the MIT License - see LICENSE file for details.
 
 FastAPI - Modern web framework
 OpenAI - GPT models
-Anthropic - Claude models

@@ -207,7 +207,7 @@ def sample_fallback_request():
     return {
         "prompt": "Explain quantum computing",
         "primary_provider": "openai",
-        "fallback_providers": ["anthropic"],
+        "fallback_providers": [],
         "timeout": 10,
         "temperature": 0.5,
     }
