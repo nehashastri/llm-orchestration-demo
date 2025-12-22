@@ -151,28 +151,44 @@ Error rate
 
 
 🚀 Deployment
-Environment Variables
-bash# Required
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
 
-# Optional (with defaults)
-ENVIRONMENT=production
-LOG_LEVEL=INFO
-DEFAULT_MODEL=gpt-4o
-DEFAULT_TEMPERATURE=0.7
-Docker (Coming Soon)
-bashdocker build -t llm-orchestration .
-Production Checklist
+### Local Development
+```bash
+pixi install
+cp .env.example .env
+# Edit .env and add your OpenAI API key
+pixi run dev
+```
 
- Set ENVIRONMENT=production in .env
- Configure API key rotation
-Set up monitoring (Prometheus, Grafana)
-Enable HTTPS
-Configure rate limiting per user/API key
-Set up log aggregation (ELK, Datadog)
-Add authentication/authorization
-Configure CORS allowed origins
+### Docker Deployment
+```bash
+cp .env.example .env
+# Edit .env and add your OpenAI API key
+docker-compose up -d
+```
+
+**Verify deployment:**
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/models
+```
+
+**Access the API:**
+- API: http://localhost:8000
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
+
+#### Environment Variables
+See `.env.example` for all available configuration options. Key variables:
+- `OPENAI_API_KEY` - **Required** for OpenAI models
+- `ANTHROPIC_API_KEY` - Optional for Anthropic/Claude models
+- `ENVIRONMENT` - production/development/testing (default: production)
+- `LOG_LEVEL` - DEBUG/INFO/WARNING/ERROR (default: INFO)
+- `REDIS_HOST` - Redis hostname (default: redis for docker-compose, localhost for local dev)
+- `DEFAULT_MODEL` - Default LLM model (default: gpt-4o)
+- `RATE_LIMIT_REQUESTS` - Requests per window (default: 100)
+
+For comprehensive Docker deployment guidance, see [DOCKER.md](DOCKER.md)
 
 
 📚 Documentation

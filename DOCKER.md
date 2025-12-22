@@ -10,20 +10,84 @@ This guide explains how to deploy the LLM Orchestration API using Docker and Doc
 
 ## Quick Start
 
-1. **Set your OpenAI API key** (create `.env` file in project root):
+1. **Set your OpenAI API key** (copy and configure the environment file):
 ```bash
-OPENAI_API_KEY=your-api-key-here
+cp .env.example .env
+# Edit .env and add your OpenAI API key
 ```
 
 2. **Build and run with Docker Compose**:
 ```bash
-docker-compose up --build
+docker-compose up -d
 ```
 
 3. **Access the API**:
 - API: http://localhost:8000
 - Swagger UI: http://localhost:8000/docs
 - Health Check: http://localhost:8000/health
+
+4. **Verify the deployment**:
+```bash
+# Check health status
+curl http://localhost:8000/health
+
+# List available models
+curl http://localhost:8000/models
+
+# View container status
+docker-compose ps
+```
+
+5. **Stop the services**:
+```bash
+docker-compose stop
+```
+
+## Testing the API
+
+### Test the Health Endpoint
+```bash
+curl http://localhost:8000/health
+```
+
+Expected response:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2025-12-22T05:04:21Z",
+  "version": "0.1.0",
+  "providers": {
+    "openai": {
+      "status": "connected",
+      "error": null
+    }
+  }
+}
+```
+
+### List Available Models
+```bash
+curl http://localhost:8000/models
+```
+
+### Test Chat Endpoint (requires OPENAI_API_KEY)
+```bash
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Hello, how are you?",
+    "model": "gpt-4o",
+    "temperature": 0.7,
+    "max_tokens": 500
+  }'
+```
+
+### Interactive Testing
+1. Open Swagger UI: http://localhost:8000/docs
+2. Click on any endpoint to expand it
+3. Click "Try it out" button
+4. Fill in the request parameters
+5. Click "Execute"
 
 ## Architecture
 
@@ -43,10 +107,13 @@ The deployment consists of two services:
 
 ## Environment Variables
 
+All environment variables are configured in the `.env` file. See `.env.example` for a complete list with descriptions.
+
 ### Required
-- `OPENAI_API_KEY` - Your OpenAI API key
+- `OPENAI_API_KEY` - Your OpenAI API key (get from https://platform.openai.com/api-keys)
 
 ### Optional (with defaults)
+- `ANTHROPIC_API_KEY` - Anthropic API key (optional, for Claude models)
 - `ENVIRONMENT` - development/production/testing (default: production)
 - `LOG_LEVEL` - DEBUG/INFO/WARNING/ERROR (default: INFO)
 - `REDIS_HOST` - Redis hostname (default: redis)

@@ -128,7 +128,19 @@ async def test_performance_middleware_warn_branch(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_rate_limit_middleware_blocks_second_request():
+async def test_rate_limit_middleware_blocks_second_request(monkeypatch):
+    # Mock the Redis rate limit check to simulate rate limit scenarios
+    call_count = [0]  # Use list to allow mutation in nested function
+
+    async def mock_check_rate_limit(*args, **kwargs):
+        call_count[0] += 1
+        if call_count[0] <= 1:
+            return (True, 0)  # First request allowed
+        else:
+            return (False, 0)  # Second request blocked
+
+    monkeypatch.setattr("src.api.middleware.check_rate_limit", mock_check_rate_limit)
+
     middleware = RateLimitMiddleware(app=None, requests_per_window=1, window_seconds=3600)
     request = make_request("/chat")
 

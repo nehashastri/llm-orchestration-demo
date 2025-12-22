@@ -27,7 +27,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
     python-dotenv>=1.0.0 \
     python-multipart>=0.0.12 \
     structlog>=25.5.0 \
-    redis>=5.0.0
+    redis>=5.0.0 \
+    psutil>=6.0.0
 
 # Copy application source code
 COPY src/ ./src/
