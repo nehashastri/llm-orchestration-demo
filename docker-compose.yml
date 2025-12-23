@@ -1,0 +1,64 @@
+services:
+  # FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: llm-orchestration-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Required: OpenAI API Key
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+      # Application Settings
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+
+      # Redis Connection (points to redis service)
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+
+      # LLM Defaults
+      - DEFAULT_MODEL=gpt-4o
+      - DEFAULT_TEMPERATURE=0.7
+      - DEFAULT_MAX_TOKENS=500
+      - DEFAULT_TIMEOUT=30
+
+      # Rate Limiting
+      - RATE_LIMIT_REQUESTS=100
+      - RATE_LIMIT_WINDOW=3600
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - llm-network
+
+  # Redis for Rate Limiting
+  redis:
+    image: redis:7-alpine
+    container_name: llm-orchestration-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - llm-network
+    # Ephemeral storage - no persistence configured
+    # Data will be lost on container restart (suitable for rate limiting)
+
+networks:
+  llm-network:
+    driver: bridge

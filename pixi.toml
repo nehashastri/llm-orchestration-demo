@@ -1,5 +1,5 @@
 [environments]
-default = []
+default = ["dev"]
 dev = ["dev"]
 
 [workspace]
@@ -17,10 +17,11 @@ uvicorn-standard = "*"
 pydantic = ">=2.10.0"
 pydantic-settings = ">=2.6.0"
 openai = ">=1.54.0"
-anthropic = ">=0.39.0"
 httpx = ">=0.27.0"
 python-dotenv = ">=1.0.0"
 python-multipart = ">=0.0.12"
+structlog = ">=25.5.0,<26"
+psutil = ">=6.0.0"
 
 [feature.dev.dependencies]
 pytest = ">=8.3.0"
@@ -28,13 +29,17 @@ pytest-asyncio = ">=0.24.0"
 pytest-cov = ">=6.0.0"
 pytest-mock = ">=3.14.0"
 ruff = ">=0.8.0"
-mypy = ">=1.13.0"
+mdformat = ">=0.7.0"
+
+[pypi-dependencies]
+redis = ">=5.0.0"
 
 [feature.dev.tasks]
-dev = "uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000"
+dev = "uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000"
+dev-public = "uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000"
 test = "pytest tests/ -v"
 test-cov = "pytest tests/ --cov=src --cov-report=html"
-format = "ruff format src/ tests/ examples/"
+format = "ruff format src/ tests/ examples/ && mdformat *.md docs/ examples/"
 lint = "ruff check src/ tests/ examples/ --fix"
 typecheck = "mypy src/"
 check = {depends-on = ["format", "lint", "typecheck"]}
